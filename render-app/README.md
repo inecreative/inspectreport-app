@@ -131,7 +131,10 @@ server/
   ai.js              AI provider module + keyword fallback
   routes.js          All JSON API routes
 public/
-  index.html         Single-page app shell
+  landing.html       Public marketing landing page, served at /
+  landing.css        Landing page styles (same design tokens)
+  app.html           Single-page app shell, served at /app
+  assets/            Landing page photos (Pexels, free license)
   styles.css         Navy #0F2A3D + amber #D97706 design
   app.js             Frontend logic
   pdf.js             Client-side PDF generation (jsPDF)
