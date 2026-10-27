@@ -454,3 +454,39 @@ select.sev-Urgent { color: var(--red); font-weight: 700; }
 
 /* ---------- Footer ---------- */
 .app-footer { text-align: center; color: var(--muted); padding: 22px; border-top: 1.5px solid var(--line); font-size: 14.5px; }
+
+/* ---------- Paywall: locked PDF button + upgrade prompt ---------- */
+.btn-locked {
+  background: var(--amber-light);
+  color: var(--amber-text);
+  border-color: var(--amber);
+}
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(15, 42, 61, .55);
+  display: grid;
+  place-items: center;
+  padding: 20px;
+}
+.modal-card { max-width: 440px; width: 100%; margin-bottom: 0; text-align: left; }
+.modal-card p { font-size: 15.5px; line-height: 1.6; }
+.modal-lock { font-size: 30px; margin-bottom: 6px; }
+#upgradeSubscribeWrap { margin: 16px 0 6px; }
+
+/* ---------- Billing: admin access box ---------- */
+.admin-box {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1.5px solid rgba(255, 255, 255, .25);
+}
+.admin-title {
+  font-family: Archivo, sans-serif;
+  font-size: 16px;
+  font-weight: 800;
+  margin: 0 0 6px;
+  color: white;
+}
+.admin-title small { font-size: 12.5px; opacity: .75; font-weight: 600; }
+.admin-status { min-height: 18px; margin: 10px 0 0; font-weight: 600; }

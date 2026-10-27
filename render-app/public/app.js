@@ -48,7 +48,7 @@ function showAuth() {
   $('#authView').classList.remove('hidden');
   $('#appView').classList.add('hidden');
   $('#userArea').classList.add('hidden');
-  $('#pdfBtn').disabled = true;
+  updatePdfButton();
 }
 
 function showApp() {
@@ -128,13 +128,35 @@ async function loadBilling() {
   try {
     state.billing = await api('/api/billing');
   } catch (_) {
-    state.billing = { priceMonthly: 49, paymentLinkUrl: null };
+    state.billing = { priceMonthly: 49, paymentLinkUrl: null, subscribed: false, isAdmin: false };
   }
   renderBilling();
+  updatePdfButton();
+}
+
+function isSubscribed() {
+  return Boolean(state.billing && state.billing.subscribed);
 }
 
 function billingHtml() {
   const b = state.billing || { priceMonthly: 49, paymentLinkUrl: null };
+  if (b.subscribed) {
+    const viaNote =
+      b.subscribedVia === 'comp'
+        ? 'Complimentary access (founder / beta). All features unlocked.'
+        : b.subscribedVia === 'stripe'
+          ? 'Paid via Stripe. All features unlocked, including PDF export.'
+          : 'Access granted. All features unlocked, including PDF export.';
+    return `
+    <h2>Billing</h2>
+    <div class="billing-inner">
+      <div>
+        <div class="billing-price">Plan: Active <small>✓</small></div>
+        <p class="muted">${viaNote}</p>
+      </div>
+      <div><span class="pill pill-good">Subscribed</span></div>
+    </div>${adminBoxHtml(b)}`;
+  }
   const button = b.paymentLinkUrl
     ? `<a class="btn btn-amber btn-big" href="${esc(b.paymentLinkUrl)}" target="_blank" rel="noopener">Subscribe — $${b.priceMonthly}/mo</a>`
     : `<button class="btn btn-amber btn-big" disabled>Subscribe — $${b.priceMonthly}/mo</button>
@@ -145,15 +167,63 @@ function billingHtml() {
       <div>
         <div class="billing-price">$${b.priceMonthly}<small>/mo flat per account</small></div>
         <p class="muted">Unlimited reports. No per-inspector fees, no promo pricing that doubles later.</p>
+        <p class="muted small">Reports and the live preview are free — the plan unlocks PDF export.</p>
       </div>
       <div>${button}</div>
+    </div>${adminBoxHtml(b)}`;
+}
+
+/* Admin-only: grant/revoke subscription access for beta testers by email.
+   Rendered solely when /api/billing says the signed-in user is an admin. */
+function adminBoxHtml(b) {
+  if (!b.isAdmin) return '';
+  return `
+    <div class="admin-box">
+      <h3 class="admin-title">Manage access <small>(admin)</small></h3>
+      <p class="muted small">Grant or revoke subscription access for a beta tester by the email on their account.</p>
+      <div class="row-gap">
+        <input type="email" class="inline-input admin-email" placeholder="tester@example.com" />
+        <button class="btn btn-amber btn-sm admin-grant">Grant access</button>
+        <button class="btn btn-ghost btn-sm admin-revoke">Revoke</button>
+      </div>
+      <p class="small admin-status" aria-live="polite"></p>
     </div>`;
+}
+
+async function adminAccess(card, grant) {
+  const email = card.querySelector('.admin-email').value.trim();
+  const status = card.querySelector('.admin-status');
+  if (!email) {
+    status.textContent = 'Enter the account email first.';
+    return;
+  }
+  status.textContent = grant ? 'Granting…' : 'Revoking…';
+  try {
+    const out = await api('/api/admin/access', {
+      method: 'POST',
+      body: JSON.stringify({ email, grant }),
+    });
+    status.textContent = out.subscribed
+      ? `✓ ${out.email} now has subscription access (${out.subscribedVia || 'manual'}). It takes effect on their next page load.`
+      : `${out.email} no longer has subscription access.`;
+    // If the admin changed their own record, refresh our own gate state.
+    if (state.user && out.email.toLowerCase() === state.user.email.toLowerCase()) {
+      await loadBilling();
+    }
+  } catch (err) {
+    status.textContent = err.message;
+  }
 }
 
 function renderBilling() {
   for (const id of ['#billingCardList', '#billingCardEditor']) {
     const el = $(id);
-    if (el) el.innerHTML = billingHtml();
+    if (!el) continue;
+    el.innerHTML = billingHtml();
+    const grantBtn = el.querySelector('.admin-grant');
+    const revokeBtn = el.querySelector('.admin-revoke');
+    if (grantBtn) grantBtn.addEventListener('click', () => adminAccess(el, true));
+    if (revokeBtn) revokeBtn.addEventListener('click', () => adminAccess(el, false));
   }
 }
 
@@ -211,7 +281,7 @@ async function openReport(id) {
 function showEditor() {
   $('#listView').classList.add('hidden');
   $('#editorView').classList.remove('hidden');
-  $('#pdfBtn').disabled = false;
+  updatePdfButton();
   const r = state.current.report;
   $('#f_address').value = r.address || '';
   $('#f_client_name').value = r.client_name || '';
@@ -229,7 +299,7 @@ $('#backBtn').addEventListener('click', async () => {
   state.current = null;
   $('#editorView').classList.add('hidden');
   $('#listView').classList.remove('hidden');
-  $('#pdfBtn').disabled = true;
+  updatePdfButton();
   await loadReports();
 });
 
@@ -240,7 +310,7 @@ $('#deleteReportBtn').addEventListener('click', async () => {
   state.current = null;
   $('#editorView').classList.add('hidden');
   $('#listView').classList.remove('hidden');
-  $('#pdfBtn').disabled = true;
+  updatePdfButton();
   await loadReports();
 });
 
@@ -670,9 +740,64 @@ function renderPreview() {
     </article>`;
 }
 
-/* --- PDF --- */
+/* --- PDF (gated: export is part of the $49/mo plan) --- */
+
+/**
+ * Header PDF button states:
+ *  - no report open          -> disabled, default label
+ *  - report open, subscribed -> enabled, normal download
+ *  - report open, free plan   -> enabled but locked (🔒 PDF — Pro);
+ *    clicking it opens the upgrade prompt instead of generating a PDF.
+ * Reports, editing and the live preview are always free.
+ */
+function updatePdfButton() {
+  const btn = $('#pdfBtn');
+  if (!state.current) {
+    btn.disabled = true;
+    btn.classList.remove('btn-locked');
+    btn.textContent = '⬇ Download PDF';
+    return;
+  }
+  btn.disabled = false;
+  if (isSubscribed()) {
+    btn.classList.remove('btn-locked');
+    btn.textContent = '⬇ Download PDF';
+  } else {
+    btn.classList.add('btn-locked');
+    btn.textContent = '🔒 PDF — Pro';
+  }
+}
+
+function openUpgrade() {
+  const b = state.billing || { priceMonthly: 49, paymentLinkUrl: null };
+  $('#upgradeSubscribeWrap').innerHTML = b.paymentLinkUrl
+    ? `<a class="btn btn-amber btn-big btn-block" href="${esc(b.paymentLinkUrl)}" target="_blank" rel="noopener">Subscribe — $${b.priceMonthly}/mo</a>`
+    : `<button class="btn btn-amber btn-big btn-block" disabled>Subscribe — $${b.priceMonthly}/mo</button>
+       <p class="muted small">Payments are not live yet — the Subscribe button activates once the payment link is configured.</p>`;
+  $('#upgradeModal').classList.remove('hidden');
+}
+
+function closeUpgrade() {
+  $('#upgradeModal').classList.add('hidden');
+}
+
+$('#upgradeClose').addEventListener('click', closeUpgrade);
+$('#upgradeModal').addEventListener('click', (e) => {
+  if (e.target === e.currentTarget) closeUpgrade();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeUpgrade();
+});
+
 $('#pdfBtn').addEventListener('click', async () => {
   if (!state.current) return;
+  // Refresh billing right before deciding, so a just-granted or
+  // just-paid subscription takes effect without a page reload.
+  await loadBilling();
+  if (!isSubscribed()) {
+    openUpgrade();
+    return;
+  }
   await window.downloadReportPdf(state.current, (msg) => {
     $('#pdfStatus').textContent = msg;
   });
