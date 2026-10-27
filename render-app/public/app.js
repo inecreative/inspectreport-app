@@ -67,6 +67,11 @@ async function initAuth() {
     await loadReports();
   } catch (_) {
     showAuth();
+    // Landing page CTAs link here with ?mode=signup to start on the
+    // create-account form instead of sign-in.
+    if (new URLSearchParams(window.location.search).get('mode') === 'signup') {
+      setAuthMode('signup');
+    }
   }
 }
 

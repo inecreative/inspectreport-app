@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="color-scheme" content="light" />
+<title>InspectReport AI — Inspection reports in minutes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+
+<header class="app-header">
+  <div class="header-inner">
+    <div class="brand"><div class="brand-mark">🏠</div><div><b>InspectReport AI</b><span>For inspectors &amp; contractors</span></div></div>
+    <div class="steps"><span class="step active">1 · Photos + Notes</span><span>→</span><span class="step">2 · AI Structure</span><span>→</span><span class="step">3 · PDF Report</span></div>
+    <div class="header-actions">
+      <span id="pdfStatus" class="pdf-status" aria-live="polite"></span>
+      <button id="pdfBtn" class="btn btn-primary" disabled>⬇ Download PDF</button>
+      <span id="userArea" class="user-area hidden">
+        <span id="userEmail" class="user-email"></span>
+        <button id="logoutBtn" class="btn btn-ghost">Log out</button>
+      </span>
+    </div>
+  </div>
+</header>
+
+<main class="container">
+
+  <!-- ============ AUTH VIEW ============ -->
+  <section id="authView" class="hidden">
+    <div class="auth-intro">
+      <div class="brand-mark">🏠</div>
+      <h1>InspectReport AI</h1>
+      <p>Sign in to your inspection workspace.</p>
+    </div>
+    <div class="card auth-card">
+      <h2 id="authTitle">Sign in</h2>
+      <form id="authForm">
+        <label class="field">
+          <span>Email</span>
+          <input type="email" id="authEmail" required autocomplete="email" placeholder="you@company.com" />
+        </label>
+        <label class="field">
+          <span>Password</span>
+          <input type="password" id="authPassword" required autocomplete="current-password" placeholder="At least 8 characters" />
+        </label>
+        <p id="authError" class="error hidden"></p>
+        <button type="submit" id="authSubmit" class="btn btn-amber btn-big btn-block">Sign in</button>
+      </form>
+      <p class="auth-switch">
+        <span id="authSwitchText">New here?</span>
+        <a href="#" id="authSwitch">Create an account</a>
+      </p>
+    </div>
+  </section>
+
+  <!-- ============ APP VIEW ============ -->
+  <section id="appView" class="hidden">
+
+    <!-- Reports list -->
+    <div id="listView">
+      <div class="row-between">
+        <h1>Your reports</h1>
+        <div class="row-gap">
+          <button id="sampleBtn" class="btn btn-navy">Load sample job</button>
+          <button id="newReportBtn" class="btn btn-amber">+ New report</button>
+        </div>
+      </div>
+      <p id="listEmpty" class="muted hidden">No reports yet. Create one, or load the sample job to see how it works.</p>
+      <div id="reportList" class="report-list"></div>
+
+      <div class="card billing-card" id="billingCardList"></div>
+    </div>
+
+    <!-- Report editor -->
+    <div id="editorView" class="hidden">
+      <div class="row-between">
+        <button id="backBtn" class="btn btn-ghost">← All reports</button>
+        <button id="deleteReportBtn" class="btn btn-danger-ghost">Delete report</button>
+      </div>
+
+      <div class="editor-grid">
+      <div class="editor-col">
+      <div id="statsRow" class="stats-row"></div>
+
+      <div class="card">
+        <h2>Property &amp; Client</h2>
+        <div class="grid-2">
+          <label class="field"><span>Property address</span>
+            <input type="text" id="f_address" placeholder="123 Maple St, Austin, TX 78701" /></label>
+          <label class="field"><span>Inspection date</span>
+            <input type="date" id="f_inspection_date" /></label>
+          <label class="field"><span>Client name</span>
+            <input type="text" id="f_client_name" placeholder="Jordan Miller" /></label>
+          <label class="field"><span>Inspector name</span>
+            <input type="text" id="f_inspector_name" placeholder="Alex Carter, Licensed Inspector" /></label>
+          <label class="field"><span>Client email</span>
+            <input type="email" id="f_client_email" placeholder="client@example.com" /></label>
+          <label class="field"><span>Client phone</span>
+            <input type="tel" id="f_client_phone" placeholder="(512) 555-0147" /></label>
+        </div>
+
+        <h3 class="subhead">Custom fields</h3>
+        <div id="customFieldList"></div>
+        <button id="addFieldBtn" class="btn btn-navy btn-sm">+ Add custom field</button>
+
+        <h3 class="subhead">Saved custom fields</h3>
+        <p class="muted small">Fields you save once can be re-added to any report.</p>
+        <div id="templateList"></div>
+        <div class="row-gap">
+          <input type="text" id="tplName" class="inline-input" placeholder="Field name (e.g. Gate code)" />
+          <input type="text" id="tplValue" class="inline-input" placeholder="Value (optional)" />
+          <button id="addTemplateBtn" class="btn btn-navy btn-sm">Save template</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Photos</h2>
+        <div class="row-gap wrap">
+          <label class="btn btn-navy btn-file">
+            ⬆ Upload photos
+            <input type="file" id="photoInput" accept="image/jpeg,image/png,image/webp,image/gif" multiple hidden />
+          </label>
+          <label class="field-inline">
+            <span>Attach to finding:</span>
+            <select id="photoFindingSelect"><option value="">Report (general)</option></select>
+          </label>
+        </div>
+        <p id="photoError" class="error hidden"></p>
+        <div id="photoGrid" class="photo-grid"></div>
+      </div>
+
+      <div class="card">
+        <h2>Findings</h2>
+        <label class="field">
+          <span>Field notes — write it rough, AI structures it</span>
+          <textarea id="notesBox" rows="4" placeholder="e.g. kitchen sink leak active, cabinet water damage. roof shingles cracked north side. furnace filter dirty."></textarea>
+        </label>
+        <div class="row-gap">
+          <button id="structureBtn" class="btn btn-amber">✨ AI Structure notes</button>
+          <button id="addFindingBtn" class="btn btn-navy">+ Add finding manually</button>
+        </div>
+        <p id="structureMsg" class="muted small"></p>
+        <div id="findingList"></div>
+      </div>
+
+      <div class="card">
+        <h2>Summary</h2>
+        <label class="field">
+          <span>Executive summary (appears at the top of the report)</span>
+          <textarea id="summaryBox" rows="4" placeholder="Summarize the inspection for your client…"></textarea>
+        </label>
+        <button id="summarizeBtn" class="btn btn-navy">✨ Generate summary with AI</button>
+      </div>
+
+      <div class="card billing-card" id="billingCardEditor"></div>
+      </div><!-- /.editor-col -->
+
+      <div class="preview-wrap">
+        <h2 class="preview-title">Live report preview</h2>
+        <div id="preview" class="preview"></div>
+      </div>
+      </div><!-- /.editor-grid -->
+    </div>
+  </section>
+</main>
+
+<footer class="app-footer">
+  <p>InspectReport AI — photo + notes → a finished inspection report. Flat $49/mo per account.</p>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="/pdf.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>

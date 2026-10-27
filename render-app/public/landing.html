@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="color-scheme" content="light" />
+<title>InspectReport AI — Turn site photos &amp; rough notes into a finished inspection report</title>
+<meta name="description" content="InspectReport AI structures your field notes into professional inspection findings with severity ratings and repair-cost estimates, then exports a client-ready PDF. Flat $49/mo per account — free during the beta." />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/landing.css" />
+</head>
+<body>
+
+<!-- ============ HEADER ============ -->
+<header class="lp-header">
+  <div class="lp-header-inner">
+    <a class="lp-brand" href="/">
+      <span class="lp-brand-mark">🏠</span>
+      <span class="lp-brand-text"><b>InspectReport AI</b><span>For inspectors &amp; contractors</span></span>
+    </a>
+    <nav class="lp-nav">
+      <a href="#how">How it works</a>
+      <a href="#sample">Sample report</a>
+      <a href="#pricing">Pricing</a>
+      <a href="#faq">FAQ</a>
+    </nav>
+    <div class="lp-header-actions">
+      <a class="btn btn-header-ghost" href="/app" data-signin>Sign in</a>
+      <a class="btn btn-amber" href="/app?mode=signup" data-cta>Get started</a>
+    </div>
+  </div>
+</header>
+
+<main>
+  <!-- ============ HERO ============ -->
+  <section class="hero">
+    <div class="lp-wrap hero-grid">
+      <div class="hero-copy">
+        <p class="eyebrow">For home inspectors &amp; contractors</p>
+        <h1>Turn site photos &amp; rough notes into a finished inspection report.</h1>
+        <p class="hero-sub">InspectReport AI structures your field notes into professional findings with
+          severity ratings and repair-cost estimates — then exports a client-ready PDF.
+          You inspect. It writes.</p>
+        <div class="hero-ctas">
+          <a class="btn btn-amber btn-big" href="/app?mode=signup" data-cta>Create your free account</a>
+          <a class="btn btn-white btn-big" href="#sample">See a sample report</a>
+        </div>
+        <p class="hero-note">Free during the beta — no card required.</p>
+      </div>
+
+      <div class="hero-visual">
+        <article class="report report-mini">
+          <img class="report-cover" src="/assets/photo-house.jpg" alt="Suburban home at dusk, photographed during an inspection" />
+          <div class="report-head">
+            <span class="badge badge-sample">Sample report</span>
+            <h2>123 Maple St, Austin, TX 78701</h2>
+            <p>Professional inspection report · Generated with InspectReport AI</p>
+          </div>
+          <div class="report-stats">
+            <div><b>4</b><span>Findings</span></div>
+            <div><b class="urgent-num">2</b><span>Urgent</span></div>
+            <div><b>$1,590</b><span>Est. repairs</span></div>
+          </div>
+          <div class="report-rows">
+            <div class="r-item">
+              <div class="r-main">
+                <div class="r-line"><b>Kitchen — Active leak under kitchen sink</b><span class="pill pill-urgent">Urgent</span><span class="pill pill-cost">~$450</span></div>
+              </div>
+            </div>
+            <div class="r-item">
+              <div class="r-main">
+                <div class="r-line"><b>Roof — Damaged asphalt shingles on north slope</b><span class="pill pill-urgent">Urgent</span><span class="pill pill-cost">~$780</span></div>
+              </div>
+            </div>
+            <p class="report-more">+ 2 more findings — full sample below ↓</p>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ BEFORE / AFTER ============ -->
+  <section class="band">
+    <div class="lp-wrap">
+      <p class="eyebrow">From site photos to a finished report</p>
+      <h2 class="section-title">You already did the hard part on site.<br />Don’t redo it at a desk.</h2>
+      <div class="ba-grid">
+        <div class="ba-card">
+          <p class="ba-label">On site — 4:47 PM</p>
+          <div class="ba-photos">
+            <img src="/assets/photo-plumbing.jpg" alt="Under-sink plumbing photographed during the inspection" />
+            <img src="/assets/photo-shingles.jpg" alt="Close-up of asphalt roof shingles photographed during the inspection" />
+          </div>
+          <pre class="ba-notes">sink leak under kitchen p-trap, cabinet wet
+shingles cracked north side, few lifting
+bath outlet no gfci
+furnace filter black, replace</pre>
+          <p class="ba-caption">Raw photos + four lines of rough notes. That’s the whole input.</p>
+        </div>
+        <div class="ba-arrow" aria-hidden="true">→<span>AI Structure</span></div>
+        <div class="ba-card ba-after">
+          <p class="ba-label">In the truck — 4:52 PM</p>
+          <div class="r-item">
+            <div class="r-main">
+              <div class="r-line"><b>Kitchen — Active leak under kitchen sink</b><span class="pill pill-urgent">Urgent</span><span class="pill pill-cost">~$450</span></div>
+              <p class="r-detail">Active water leak observed at the P-trap. The cabinet base shows moisture damage and staining. Recommend repair by a licensed plumber.</p>
+            </div>
+          </div>
+          <div class="r-item">
+            <div class="r-main">
+              <div class="r-line"><b>Roof — Damaged asphalt shingles</b><span class="pill pill-urgent">Urgent</span><span class="pill pill-cost">~$780</span></div>
+              <p class="r-detail">Multiple shingles on the north slope are cracked and lifting, exposing the underlayment. Recommend repair to prevent water intrusion.</p>
+            </div>
+          </div>
+          <div class="total-row"><span>Total estimated repairs: <b>$1,590</b></span><span>PDF ready ✓</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ SAMPLE REPORT (ANNOTATED) ============ -->
+  <section class="band band-cream" id="sample">
+    <div class="lp-wrap">
+      <p class="eyebrow">Sample report</p>
+      <h2 class="section-title">Inside every report</h2>
+      <p class="section-sub">This is the exact layout your clients get — the same sample job you can load inside the app. Fictional property, real product.</p>
+
+      <article class="report">
+        <div class="report-head">
+          <span class="badge badge-sample">Sample</span>
+          <h2>123 Maple St, Austin, TX 78701</h2>
+          <p>Professional inspection report · Generated with InspectReport AI</p>
+        </div>
+        <div class="report-body">
+          <dl class="meta">
+            <div><dt>Client</dt><dd>Jordan Miller</dd></div>
+            <div><dt>Inspector</dt><dd>Alex Carter, Licensed Inspector</dd></div>
+            <div><dt>Gate code</dt><dd>4821</dd></div>
+            <div><dt>HOA</dt><dd>Maple Grove HOA</dd></div>
+          </dl>
+          <p class="note-tag">↑ Your custom fields — gate codes, HOA names, lockbox info — print right on the report</p>
+
+          <h3>Executive summary</h3>
+          <div class="summary-box">A home inspection was completed at 123 Maple St, Austin, TX 78701. 4 findings were documented, including 2 urgent items that should be addressed promptly: an active leak under the kitchen sink and damaged roof shingles on the north slope. The total estimated cost of recommended repairs is $1,590.</div>
+          <p class="note-tag">↑ A plain-language summary your client actually reads</p>
+
+          <h3>Findings (4)</h3>
+
+          <div class="r-item">
+            <div class="r-main">
+              <div class="r-line"><b>1. Kitchen — Active leak under kitchen sink</b><span class="pill pill-urgent">Urgent</span><span class="pill pill-cost">~$450</span></div>
+              <p class="r-detail">Active water leak observed at the P-trap under the kitchen sink. The cabinet base shows moisture damage and staining. Recommend repair by a licensed plumber and drying the cabinet to prevent mold growth.</p>
+            </div>
+          </div>
+          <p class="note-tag">↑ Severity badge + ballpark repair cost on every finding</p>
+
+          <div class="r-item">
+            <div class="r-main">
+              <div class="r-line"><b>2. Roof — Damaged asphalt shingles on north slope</b><span class="pill pill-urgent">Urgent</span><span class="pill pill-cost">~$780</span></div>
+              <p class="r-detail">Multiple asphalt shingles on the north slope are cracked and lifting, exposing the underlayment. Recommend repair by a roofing contractor to prevent water intrusion.</p>
+              <div class="r-photos"><img src="/assets/photo-shingles.jpg" alt="Asphalt shingles on the north slope" /></div>
+            </div>
+          </div>
+          <p class="note-tag">↑ Your site photos, attached to the finding they belong to</p>
+
+          <div class="r-item">
+            <div class="r-main">
+              <div class="r-line"><b>3. Electrical — No GFCI protection at bathroom outlet</b><span class="pill pill-repair">Repair</span><span class="pill pill-cost">~$260</span></div>
+              <p class="r-detail">The bathroom receptacle is not GFCI-protected, as required for outlets near water sources. Recommend installing a GFCI receptacle or breaker.</p>
+            </div>
+          </div>
+
+          <div class="r-item">
+            <div class="r-main">
+              <div class="r-line"><b>4. HVAC — Furnace filter overdue for replacement</b><span class="pill pill-monitor">Monitor</span><span class="pill pill-cost">~$100</span></div>
+              <p class="r-detail">The furnace filter is heavily loaded with dust and overdue for replacement. No other defects were observed with the heating system. Recommend replacing the filter and monitoring airflow.</p>
+            </div>
+          </div>
+
+          <div class="total-row">
+            <span>Total estimated repairs: <b>$1,590</b></span>
+            <span>Inspector signature: ___________________</span>
+          </div>
+          <p class="note-tag">↑ One total your client can plan around</p>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ============ CTA BAND 1 ============ -->
+  <section class="cta-band">
+    <div class="lp-wrap cta-band-inner">
+      <h2>Your next report could already be done.</h2>
+      <a class="btn btn-amber btn-big" href="/app?mode=signup" data-cta>Try the beta free</a>
+    </div>
+  </section>
+
+  <!-- ============ FEATURES ============ -->
+  <section class="band">
+    <div class="lp-wrap">
+      <p class="eyebrow">Why inspectors switch</p>
+      <h2 class="section-title">Built for the walk, not the desk</h2>
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon">✨</div>
+          <h3>AI structuring from rough notes</h3>
+          <p>Paste notes the way you’d text them — “sink leak, active.” AI turns each one into a titled, client-ready finding. You review and edit before anything ships.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🏷️</div>
+          <h3>Severity + repair-cost estimates</h3>
+          <p>Every finding gets a Good / Monitor / Repair / Urgent rating and a ballpark repair cost, rolled into one total your client can plan around.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">📸</div>
+          <h3>Photos in the report</h3>
+          <p>Upload job-site photos and attach them to the finding they prove. They land in the PDF right next to the write-up — no separate photo wrangling.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">📄</div>
+          <h3>Client-ready PDF export</h3>
+          <p>One click turns the report into a polished PDF with your summary, findings, photos, and totals. Send it before you’ve left the driveway.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🧩</div>
+          <h3>Custom fields</h3>
+          <p>Gate codes, HOA names, lockbox combos, utility notes — add your own fields to any report, and save the ones you reuse as templates for the next job.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">📱</div>
+          <h3>Works on your phone, in the field</h3>
+          <p>Big buttons, big type, readable in sunlight. Start the report on your phone at the property and finish it wherever you are.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ HOW IT WORKS ============ -->
+  <section class="band band-cream" id="how">
+    <div class="lp-wrap">
+      <p class="eyebrow">How it works</p>
+      <h2 class="section-title">A job, start to finish</h2>
+      <div class="steps-grid">
+        <div class="step-card">
+          <img src="/assets/photo-roofer.jpg" alt="Inspector documenting roof conditions on site" />
+          <div class="step-body">
+            <p class="step-num">Step 1</p>
+            <h3>Photos + notes</h3>
+            <p>Walk the property. Snap photos and jot rough notes — spelling optional, complete sentences not required.</p>
+          </div>
+        </div>
+        <div class="step-card">
+          <div class="step-mock" aria-hidden="true">
+            <p class="mock-note">“roof shingles cracked north side…”</p>
+            <p class="mock-arrow">↓ AI Structure</p>
+            <p class="mock-finding"><b>Roof — Damaged asphalt shingles</b><span class="pill pill-urgent">Urgent</span><span class="pill pill-cost">~$780</span></p>
+          </div>
+          <div class="step-body">
+            <p class="step-num">Step 2</p>
+            <h3>AI drafts it</h3>
+            <p>AI groups your notes by area, writes each finding up for the client, and suggests a severity and repair cost.</p>
+          </div>
+        </div>
+        <div class="step-card">
+          <img src="/assets/photo-inspector.jpg" alt="Home inspector reviewing findings on a clipboard at the front door" />
+          <div class="step-body">
+            <p class="step-num">Step 3</p>
+            <h3>You review</h3>
+            <p>Adjust wording, severity, and numbers. Add photos and your summary. Nothing reaches a client until you approve it.</p>
+          </div>
+        </div>
+        <div class="step-card">
+          <div class="step-mock step-mock-pdf" aria-hidden="true">
+            <p class="mock-doc-title">Home Inspection Report</p>
+            <p class="mock-line w90"></p>
+            <p class="mock-line w70"></p>
+            <p class="mock-line w80"></p>
+            <p class="mock-total">Total estimated repairs: <b>$1,590</b></p>
+          </div>
+          <div class="step-body">
+            <p class="step-num">Step 4</p>
+            <h3>PDF to client</h3>
+            <p>Download the finished PDF and send it the same day — while the inspection is still fresh for everyone.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CTA BAND 2 ============ -->
+  <section class="cta-band">
+    <div class="lp-wrap cta-band-inner">
+      <h2>Still typing reports at the kitchen table?</h2>
+      <a class="btn btn-amber btn-big" href="/app?mode=signup" data-cta>Try the beta free</a>
+    </div>
+  </section>
+
+  <!-- ============ THE MATH + PRICING ============ -->
+  <section class="band" id="pricing">
+    <div class="lp-wrap">
+      <p class="eyebrow">The math</p>
+      <h2 class="section-title">One flat price. No per-inspector math.</h2>
+      <p class="section-sub">Most inspection software charges per inspector — so the bill grows every time your team does. Here’s what a three-inspector shop typically pays:</p>
+
+      <div class="math-table-wrap">
+        <table class="math-table">
+          <thead>
+            <tr><th>Software</th><th>3 inspectors pay</th><th>The catch</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><b>Spectora</b></td>
+              <td>≈ $307/mo</td>
+              <td>Priced per inspector — every hire raises the bill</td>
+            </tr>
+            <tr>
+              <td><b>InspectForge</b></td>
+              <td>$99/mo</td>
+              <td>That’s after the intro promo ends and the price jumps</td>
+            </tr>
+            <tr class="math-us">
+              <td><b>InspectReport AI</b></td>
+              <td><b>$49/mo flat</b></td>
+              <td>Per account, not per inspector — and no promo that doubles later</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="fineprint">Competitor figures are typical published prices as of October 2026, shown for comparison.</p>
+
+      <div class="pricing-card">
+        <div class="pricing-main">
+          <p class="pricing-name">InspectReport AI</p>
+          <p class="pricing-price">$49<small>/mo flat per account</small></p>
+          <ul class="pricing-list">
+            <li>Unlimited reports</li>
+            <li>AI structuring, polish &amp; summaries</li>
+            <li>Photos + client-ready PDF export</li>
+            <li>Custom fields &amp; saved templates</li>
+          </ul>
+        </div>
+        <div class="pricing-side">
+          <p class="pricing-beta">Free during the beta</p>
+          <p>No card required. When billing starts, it’s $49/mo flat — and we’ll email you before anything is charged.</p>
+          <a class="btn btn-amber btn-big btn-block" href="/app?mode=signup" data-cta>Create your free account</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ INTERNACHI ============ -->
+  <section class="band band-cream">
+    <div class="lp-wrap">
+      <div class="inachi-card">
+        <div>
+          <p class="eyebrow">For InterNACHI members</p>
+          <h2>InterNACHI members: your beta seat is free.</h2>
+          <p>We’re inviting InterNACHI members to join the free beta while we harden InspectReport AI with working inspectors. You get full access — unlimited reports, AI structuring, PDF export — in exchange for honest feedback about what helps and what doesn’t.</p>
+        </div>
+        <div class="inachi-cta">
+          <a class="btn btn-amber btn-big" href="/app?mode=signup" data-cta>Claim your free beta account</a>
+          <p class="fineprint">Free during the beta. No card required.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ FAQ ============ -->
+  <section class="band" id="faq">
+    <div class="lp-wrap faq-wrap">
+      <p class="eyebrow">FAQ</p>
+      <h2 class="section-title">Questions, answered</h2>
+
+      <div class="faq-item">
+        <h3>How does the AI part actually work?</h3>
+        <p>You type rough field notes — fragments are fine. The AI turns each note into a titled finding with a client-ready description, a suggested severity (Good, Monitor, Repair, or Urgent), and a ballpark repair-cost estimate. You stay in control: review, edit, or delete anything before the report goes out. If no AI key is configured on your account, a built-in structurer still does the basics.</p>
+      </div>
+      <div class="faq-item">
+        <h3>What does the finished PDF look like?</h3>
+        <p>Exactly like the sample on this page: your property and client details (including your custom fields), an executive summary, and every finding with its photos, severity badge, and cost estimate, plus a total for repairs. You download it straight from the report with one click.</p>
+      </div>
+      <div class="faq-item">
+        <h3>Is the $49 per inspector?</h3>
+        <p>No — $49/mo is flat per account, not per inspector. There’s no per-seat math, and there’s no intro promo that doubles after 12 months. The price you start at is the price.</p>
+      </div>
+      <div class="faq-item">
+        <h3>Who can see my reports and photos?</h3>
+        <p>Only you. Your reports and photos are tied to your account sign-in, and other accounts can’t see them. We don’t sell your data, and your photos are used only to build your reports.</p>
+      </div>
+      <div class="faq-item">
+        <h3>When do I start paying?</h3>
+        <p>Not yet. The beta is free and no card is required to join. When billing launches, the plan is $49/mo flat per account — we’ll email you before anything is charged, and you can decide then whether to continue.</p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- ============ FOOTER ============ -->
+<footer class="lp-footer">
+  <div class="lp-wrap">
+    <div class="lp-footer-top">
+      <div class="lp-brand lp-brand-footer">
+        <span class="lp-brand-mark">🏠</span>
+        <span class="lp-brand-text"><b>InspectReport AI</b><span>Photo + notes → a finished inspection report</span></span>
+      </div>
+      <nav class="lp-footer-nav">
+        <a href="#how">How it works</a>
+        <a href="#sample">Sample report</a>
+        <a href="#pricing">Pricing</a>
+        <a href="#faq">FAQ</a>
+        <a href="/app" data-signin>Sign in</a>
+        <a href="/app?mode=signup" data-cta>Create account</a>
+      </nav>
+    </div>
+    <p class="lp-footer-small">Photos: Pexels (free license). Sample report data is fictional and shown for illustration.</p>
+    <p class="lp-footer-small">© 2026 InspectReport AI — flat $49/mo per account. Free during the beta.</p>
+  </div>
+</footer>
+
+<script>
+  // If the visitor already has a session, the front door becomes a door
+  // back into their workspace: primary CTAs read "Open the app".
+  fetch('/api/auth/me', { credentials: 'same-origin' })
+    .then(function (r) {
+      if (!r.ok) throw new Error('anonymous');
+      return r.json();
+    })
+    .then(function () {
+      document.querySelectorAll('[data-cta]').forEach(function (el) {
+        el.textContent = 'Open the app';
+        el.setAttribute('href', '/app');
+      });
+      document.querySelectorAll('[data-signin]').forEach(function (el) {
+        el.style.display = 'none';
+      });
+    })
+    .catch(function () { /* anonymous visitor: keep the signup CTAs */ });
+</script>
+</body>
+</html>
