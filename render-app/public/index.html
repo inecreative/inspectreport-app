@@ -3,20 +3,21 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="color-scheme" content="light" />
 <title>InspectReport AI — Inspection reports in minutes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
 
 <header class="app-header">
   <div class="header-inner">
-    <div class="brand">
-      <span class="brand-mark">IR</span>
-      <span class="brand-name">InspectReport <span class="brand-ai">AI</span></span>
-    </div>
+    <div class="brand"><div class="brand-mark">🏠</div><div><b>InspectReport AI</b><span>For inspectors &amp; contractors</span></div></div>
+    <div class="steps"><span class="step active">1 · Photos + Notes</span><span>→</span><span class="step">2 · AI Structure</span><span>→</span><span class="step">3 · PDF Report</span></div>
     <div class="header-actions">
       <span id="pdfStatus" class="pdf-status" aria-live="polite"></span>
-      <button id="pdfBtn" class="btn btn-amber btn-big" disabled>⬇ Download PDF</button>
+      <button id="pdfBtn" class="btn btn-primary" disabled>⬇ Download PDF</button>
       <span id="userArea" class="user-area hidden">
         <span id="userEmail" class="user-email"></span>
         <button id="logoutBtn" class="btn btn-ghost">Log out</button>
@@ -29,11 +30,10 @@
 
   <!-- ============ AUTH VIEW ============ -->
   <section id="authView" class="hidden">
-    <div class="hero">
-      <h1>Turn site photos &amp; rough notes into a finished inspection report.</h1>
-      <p class="hero-sub">InspectReport AI structures your field notes into professional findings with
-        severity ratings and repair-cost estimates — then exports a client-ready PDF.</p>
-      <p class="hero-price">Flat <strong>$49/mo</strong> per account. No per-inspector fees.</p>
+    <div class="auth-intro">
+      <div class="brand-mark">🏠</div>
+      <h1>InspectReport AI</h1>
+      <p>Sign in to your inspection workspace.</p>
     </div>
     <div class="card auth-card">
       <h2 id="authTitle">Sign in</h2>
@@ -81,6 +81,8 @@
         <button id="deleteReportBtn" class="btn btn-danger-ghost">Delete report</button>
       </div>
 
+      <div class="editor-grid">
+      <div class="editor-col">
       <div id="statsRow" class="stats-row"></div>
 
       <div class="card">
@@ -154,9 +156,13 @@
       </div>
 
       <div class="card billing-card" id="billingCardEditor"></div>
+      </div><!-- /.editor-col -->
 
-      <h2 class="preview-title">Report preview</h2>
-      <div id="preview" class="preview"></div>
+      <div class="preview-wrap">
+        <h2 class="preview-title">Live report preview</h2>
+        <div id="preview" class="preview"></div>
+      </div>
+      </div><!-- /.editor-grid -->
     </div>
   </section>
 </main>

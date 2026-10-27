@@ -607,57 +607,62 @@ $('#summarizeBtn').addEventListener('click', async () => {
   $('#summaryBox').value = summary;
 });
 
-/* --- Preview --- */
+/* --- Preview (mirrors the approved report document look) --- */
 function renderPreview() {
   const { report, customFields, findings } = state.current;
   const s = reportStats();
   const rows = [
-    ['Property address', report.address || '—'],
-    ['Inspection date', report.inspection_date ? String(report.inspection_date).slice(0, 10) : '—'],
     ['Client', report.client_name || '—'],
+    ['Date', report.inspection_date ? String(report.inspection_date).slice(0, 10) : '—'],
+    ['Inspector', report.inspector_name || '—'],
     ['Client email', report.client_email || '—'],
     ['Client phone', report.client_phone || '—'],
-    ['Inspector', report.inspector_name || '—'],
     ...customFields.map((f) => [f.name || 'Field', f.value || '—']),
   ];
   $('#preview').innerHTML = `
-    <div class="pv-header">
-      <h2>Home Inspection Report</h2>
-      <p>${esc(report.address || 'Property inspection')}</p>
-    </div>
-    <div class="pv-body">
-      <table class="pv-table">
-        ${rows.map(([k, v]) => `<tr><th>${esc(k)}</th><td>${esc(v)}</td></tr>`).join('')}
-      </table>
-      ${report.summary ? `<h3>Executive summary</h3><p>${esc(report.summary)}</p>` : ''}
-      <h3>Findings (${findings.length})</h3>
-      ${
-        findings.length
-          ? findings
-              .map(
-                (f, i) => `
-            <div class="pv-finding">
-              <div class="pv-f-head">
-                <span class="pv-f-title">${i + 1}. ${esc(f.area)} — ${esc(f.title)}</span>
-                <span><span class="badge badge-${esc(f.severity)}">${esc(f.severity)}</span>
-                <span class="pv-f-cost">${money(f.cost)}</span></span>
+    <article class="report">
+      <div class="report-head">
+        <span class="badge">Home Inspection Report</span>
+        <h1>${esc(report.address || 'Add a property address to start your report')}</h1>
+        <p>Professional inspection report · Generated with InspectReport AI</p>
+      </div>
+      <div class="report-body">
+        <dl class="meta">
+          ${rows.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}
+        </dl>
+        ${report.summary ? `<h3>Executive summary</h3><div class="summary-box">${esc(report.summary)}</div>` : ''}
+        <h3>Findings (${findings.length})</h3>
+        ${
+          findings.length
+            ? findings
+                .map(
+                  (f, i) => `
+            <div class="r-item">
+              <div class="r-main">
+                <div class="r-line"><b>${i + 1}. ${esc(f.area)}${f.area && f.title ? ' — ' : ''}${esc(f.title)}</b><span class="pill pill-${esc(
+                    String(f.severity || 'Monitor').toLowerCase()
+                  )}">${esc(f.severity)}</span>${f.cost ? `<span class="pill pill-cost">~${money(f.cost)}</span>` : ''}</div>
+                <p class="r-detail">${esc(f.detail)}</p>
+                ${
+                  f.photos && f.photos.length
+                    ? `<div class="r-photos">${f.photos
+                        .map((p) => `<img src="${esc(p.url)}" alt="${esc(p.original_name || 'Finding photo')}" />`)
+                        .join('')}</div>`
+                    : ''
+                }
               </div>
-              <p>${esc(f.detail)}</p>
-              ${
-                f.photos && f.photos.length
-                  ? `<div class="pv-photos">${f.photos
-                      .map((p) => `<img src="${esc(p.url)}" alt="${esc(p.original_name || 'Finding photo')}" />`)
-                      .join('')}</div>`
-                  : ''
-              }
             </div>`
-              )
-              .join('')
-          : '<p class="muted">No findings yet.</p>'
-      }
-      <p class="pv-total">Total estimated repair cost: ${money(s.total)}</p>
-    </div>
-    <div class="pv-footer">Generated with InspectReport AI · Estimates are ballpark repair costs, not quotes.</div>`;
+                )
+                .join('')
+            : '<p class="r-empty">No findings yet — your documented items will be grouped by area here, with photos.</p>'
+        }
+        <div class="total-row">
+          <span>Total estimated repairs: <b>${money(s.total)}</b></span>
+          <span>Inspector signature: ___________________</span>
+        </div>
+        <p class="disclaimer">This report summarizes visible conditions at the time of inspection. It is not a warranty or guarantee. Costs are ballpark estimates for planning only — obtain licensed contractor quotes for exact pricing. Photos are inspector-provided.</p>
+      </div>
+    </article>`;
 }
 
 /* --- PDF --- */

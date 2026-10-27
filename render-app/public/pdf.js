@@ -11,10 +11,10 @@
  */
 
 const SEVERITY_COLORS = {
-  Good: [30, 123, 52],
-  Monitor: [138, 109, 0],
-  Repair: [192, 86, 0],
-  Urgent: [179, 38, 30],
+  Good: [21, 128, 61],
+  Monitor: [161, 98, 7],
+  Repair: [194, 65, 12],
+  Urgent: [185, 28, 28],
 };
 
 function pdfMoney(n) {
