@@ -9,6 +9,10 @@ const routes = require('./routes');
 const app = express();
 
 app.set('trust proxy', 1); // Render terminates TLS in front of the app.
+// Stripe webhooks are verified against the exact raw request bytes, so
+// this one route gets a raw body parser BEFORE the global JSON parser
+// (body-parser flags the body as read, so express.json() then skips it).
+app.use('/api/stripe/webhook', express.raw({ type: 'application/json', limit: '1mb' }));
 app.use(express.json({ limit: '1mb' }));
 app.use(authMiddleware);
 

@@ -49,8 +49,15 @@ const SCHEMA = [
      id SERIAL PRIMARY KEY,
      email TEXT UNIQUE NOT NULL,
      password_hash TEXT NOT NULL,
-     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+     subscribed BOOLEAN NOT NULL DEFAULT false,
+     subscribed_via TEXT
    )`,
+  /* Subscription columns for databases created before the paywall:
+     idempotent, so existing production data upgrades safely on boot and
+     existing users default to unsubscribed. */
+  `ALTER TABLE users ADD COLUMN IF NOT EXISTS subscribed BOOLEAN NOT NULL DEFAULT false`,
+  `ALTER TABLE users ADD COLUMN IF NOT EXISTS subscribed_via TEXT`,
   `CREATE TABLE IF NOT EXISTS sessions (
      token TEXT PRIMARY KEY,
      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,

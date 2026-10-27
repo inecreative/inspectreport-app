@@ -8,6 +8,7 @@ const multer = require('multer');
 const db = require('./db');
 const auth = require('./auth');
 const ai = require('./ai');
+const access = require('./access');
 
 const router = express.Router();
 
@@ -155,13 +156,180 @@ router.get('/auth/me', (req, res) => {
 /* Billing                                                             */
 /* ------------------------------------------------------------------ */
 
-router.get('/billing', (req, res) => {
-  res.json({
-    planName: 'InspectReport AI',
-    priceMonthly: 49,
-    paymentLinkUrl: process.env.PAYMENT_LINK_URL || null,
-    aiEnabled: ai.aiConfigured(),
+router.get(
+  '/billing',
+  wrap(async (req, res) => {
+    let subscribed = false;
+    let subscribedVia = null;
+    let isAdmin = false;
+    if (req.user) {
+      const row = await access.userById(req.user.id);
+      ({ subscribed, subscribedVia } = access.subscriptionState(row || req.user));
+      isAdmin = access.isAdminEmail(req.user.email);
+    }
+    res.json({
+      planName: 'InspectReport AI',
+      priceMonthly: 49,
+      paymentLinkUrl: process.env.PAYMENT_LINK_URL || null,
+      aiEnabled: ai.aiConfigured(),
+      subscribed,
+      subscribedVia,
+      isAdmin,
+    });
+  })
+);
+
+/* ------------------------------------------------------------------ */
+/* Admin: grant / revoke subscription access by email (comp admins)    */
+/* ------------------------------------------------------------------ */
+
+router.post(
+  '/admin/access',
+  auth.requireAuth,
+  wrap(async (req, res) => {
+    if (!access.isAdminEmail(req.user.email)) {
+      return res.status(403).json({ error: 'Admin access required.' });
+    }
+    const email = access.normalizeEmail(req.body && req.body.email);
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      return res.status(400).json({ error: 'Enter a valid email address.' });
+    }
+    const grant = Boolean(req.body && req.body.grant);
+    const target = await access.userByEmail(email);
+    if (!target) {
+      return res.status(404).json({ error: 'No account with that email address.' });
+    }
+    const updated = await access.setSubscribedByEmail(email, grant, 'manual');
+    const stateNow = access.subscriptionState(updated || target);
+    return res.json({
+      ok: true,
+      email,
+      subscribed: stateNow.subscribed,
+      subscribedVia: stateNow.subscribedVia,
+    });
+  })
+);
+
+/* ------------------------------------------------------------------ */
+/* Stripe webhook — automatic subscription enforcement.              */
+/*                                                                     */
+/* Manual mode: when STRIPE_WEBHOOK_SECRET is unset the endpoint     */
+/* answers 503 and the rest of the app works normally; access is     */
+/* then managed by admin grants and the comp list only.              */
+/* ------------------------------------------------------------------ */
+
+const WEBHOOK_TOLERANCE_SEC = 5 * 60;
+
+function verifyStripeSignature(rawBody, signatureHeader, secret) {
+  if (!signatureHeader) return false;
+  let timestamp = null;
+  const signatures = [];
+  for (const part of String(signatureHeader).split(',')) {
+    const idx = part.indexOf('=');
+    if (idx < 0) continue;
+    const key = part.slice(0, idx).trim();
+    const value = part.slice(idx + 1).trim();
+    if (key === 't') timestamp = value;
+    if (key === 'v1') signatures.push(value);
+  }
+  if (!timestamp || !signatures.length) return false;
+  const ts = Number(timestamp);
+  if (!Number.isFinite(ts)) return false;
+  if (Math.abs(Date.now() / 1000 - ts) > WEBHOOK_TOLERANCE_SEC) return false;
+  const expected = crypto
+    .createHmac('sha256', secret)
+    .update(`${timestamp}.${rawBody}`, 'utf8')
+    .digest('hex');
+  const expectedBuf = Buffer.from(expected, 'utf8');
+  return signatures.some((sig) => {
+    const sigBuf = Buffer.from(sig, 'utf8');
+    return sigBuf.length === expectedBuf.length && crypto.timingSafeEqual(sigBuf, expectedBuf);
   });
+}
+
+/** Best-effort email extraction from a Stripe event object. */
+function emailFromEventObject(obj) {
+  if (!obj || typeof obj !== 'object') return null;
+  const candidates = [
+    obj.customer_email,
+    obj.customer_details && obj.customer_details.email,
+    obj.customerDetails && obj.customerDetails.email,
+    obj.receipt_email,
+    obj.billing_details && obj.billing_details.email,
+    obj.metadata && obj.metadata.email,
+    obj.metadata && obj.metadata.user_email,
+  ];
+  for (const c of candidates) {
+    if (c && typeof c === 'string' && c.includes('@')) return c.trim().toLowerCase();
+  }
+  return null;
+}
+
+/** Subscription statuses that mean the customer should NOT have access. */
+const DEAD_SUBSCRIPTION_STATUSES = new Set(['canceled', 'unpaid', 'incomplete_expired']);
+
+async function applyStripeSubscriptionState(eventType, obj) {
+  const email = emailFromEventObject(obj);
+  if (!email) {
+    // Subscription objects carry a customer id, not an email, and without
+    // a Stripe API key we cannot resolve it — log and move on.
+    console.warn(
+      `[stripe] ${eventType}: no customer email on event object (customer=${(obj && obj.customer) || 'n/a'}); no user updated.`
+    );
+    return;
+  }
+  let subscribed = null;
+  if (eventType === 'checkout.session.completed') {
+    if (obj.mode && obj.mode !== 'subscription') return;
+    subscribed = true;
+  } else if (
+    eventType === 'customer.subscription.created' ||
+    eventType === 'customer.subscription.updated'
+  ) {
+    subscribed = !DEAD_SUBSCRIPTION_STATUSES.has(String(obj.status || ''));
+  } else if (eventType === 'customer.subscription.deleted') {
+    subscribed = false;
+  }
+  if (subscribed === null) return;
+  const existing = await access.userByEmail(email);
+  if (!existing) {
+    console.warn(`[stripe] ${eventType}: no InspectReport account for ${email}; event acknowledged only.`);
+    return;
+  }
+  await access.setSubscribedByEmail(email, subscribed, 'stripe');
+  console.log(`[stripe] ${eventType}: ${email} -> subscribed=${subscribed} (via stripe)`);
+}
+
+router.post('/stripe/webhook', (req, res) => {
+  const secret = process.env.STRIPE_WEBHOOK_SECRET;
+  if (!secret) {
+    return res.status(503).json({ error: 'Stripe webhook is not configured.' });
+  }
+  const rawBody = Buffer.isBuffer(req.body) ? req.body.toString('utf8') : '';
+  if (!verifyStripeSignature(rawBody, req.headers['stripe-signature'], secret)) {
+    return res.status(400).json({ error: 'Invalid signature.' });
+  }
+  let event;
+  try {
+    event = JSON.parse(rawBody);
+  } catch (_) {
+    return res.status(400).json({ error: 'Invalid payload.' });
+  }
+  const obj = (event.data && event.data.object) || {};
+  // Acknowledge every well-formed signed event, even unmatched ones.
+  res.json({ received: true });
+  const handled = [
+    'checkout.session.completed',
+    'customer.subscription.created',
+    'customer.subscription.updated',
+    'customer.subscription.deleted',
+  ];
+  if (handled.includes(event.type)) {
+    applyStripeSubscriptionState(event.type, obj).catch((err) => {
+      console.error('[stripe] webhook handler error:', err);
+    });
+  }
+  return undefined;
 });
 
 /* ------------------------------------------------------------------ */
