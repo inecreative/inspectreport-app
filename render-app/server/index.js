@@ -17,7 +17,14 @@ app.get('/api/health', (req, res) => {
 });
 
 app.use('/api', routes);
-app.use(express.static(path.join(__dirname, '..', 'public')));
+
+const PUBLIC_DIR = path.join(__dirname, '..', 'public');
+
+// Public front door: the marketing landing page lives at /, the app
+// itself (with its built-in sign-in view) lives at /app.
+app.get('/', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'landing.html')));
+app.get('/app', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'app.html')));
+app.use(express.static(PUBLIC_DIR, { index: false }));
 
 // JSON error handler (multer upload errors land here too).
 // eslint-disable-next-line no-unused-vars
