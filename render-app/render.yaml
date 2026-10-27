@@ -50,3 +50,14 @@ services:
         value: gpt-4o-mini
       - key: PAYMENT_LINK_URL
         sync: false
+      # Paywall: comma-separated admin/comp emails (defaults to the
+      # founder's email when unset). Comp users count as subscribed and
+      # can grant/revoke beta access from the Billing card.
+      - key: COMP_EMAILS
+        sync: false
+      # Paywall: Stripe webhook signing secret (whsec_...). When set,
+      # subscription events from Stripe automatically flip users'
+      # access; when unset, the webhook endpoint is disabled and
+      # access is managed manually via the comp list + admin grants.
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false

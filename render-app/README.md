@@ -119,6 +119,8 @@ like `dotenv-cli`). Tables are created automatically on boot.
 | `AI_API_BASE_URL` | No       | OpenAI-compatible API base. Default `https://api.openai.com/v1`. |
 | `AI_MODEL`        | No       | Model name. Default `gpt-4o-mini`. |
 | `PAYMENT_LINK_URL`| No       | Stripe Payment Link URL for the $49/mo plan. Unset = Subscribe disabled. |
+| `COMP_EMAILS`     | No       | Comma-separated admin/comp emails. Comp users count as subscribed and can grant/revoke beta access from the Billing card. Unset = `inecreative@gmail.com`. |
+| `STRIPE_WEBHOOK_SECRET` | No | Stripe webhook signing secret (`whsec_...`) for `POST /api/stripe/webhook`. When set, Stripe subscription events automatically grant/revoke access. Unset = webhook disabled (503), manual grants only. |
 
 ## Project layout
 
@@ -129,6 +131,7 @@ server/
   db.js              PostgreSQL layer (schema auto-created on boot)
   auth.js            Password hashing (scrypt) + session cookies
   ai.js              AI provider module + keyword fallback
+  access.js          Subscription/comp-list helpers (paywall)
   routes.js          All JSON API routes
 public/
   landing.html       Public marketing landing page, served at /
