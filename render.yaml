@@ -1,0 +1,52 @@
+# Render Blueprint for InspectReport AI.
+# In the Render dashboard: New > Blueprint, point it at the Git repo that
+# contains this file, and Render creates everything below.
+
+databases:
+  - name: inspectreport-db
+    # "basic-256mb" is Render's current cheapest Basic Postgres plan
+    # (256 MB RAM, $6/mo). If Render renames plans, pick the cheapest
+    # "Basic" Postgres plan — this app needs very little database.
+    plan: basic-256mb
+    databaseName: inspectreport
+    user: inspectreport
+
+services:
+  - type: web
+    name: inspectreport-ai
+    env: node
+    # The app code lives in the render-app/ subfolder of the repo
+    # (this file sits next to the code, Render is pointed at it via
+    # the Blueprint path render-app/render.yaml).
+    rootDir: render-app
+    # Starter = $7/mo, always on (no sleeping).
+    plan: starter
+    buildCommand: npm install
+    startCommand: npm start
+    # Persistent disk for uploaded photos (survives deploys/restarts).
+    disk:
+      name: inspectreport-uploads
+      mountPath: /var/data/uploads
+      sizeGB: 1
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: inspectreport-db
+          property: connectionString
+      - key: UPLOAD_DIR
+        value: /var/data/uploads
+      - key: SESSION_SECRET
+        generateValue: true
+      # Set these two in the Render dashboard after the first deploy:
+      # your AI provider key (optional — the app works without it) and the
+      # Stripe Payment Link URL for the $49/mo plan.
+      - key: AI_API_KEY
+        sync: false
+      - key: AI_API_BASE_URL
+        value: https://api.openai.com/v1
+      - key: AI_MODEL
+        value: gpt-4o-mini
+      - key: PAYMENT_LINK_URL
+        sync: false
