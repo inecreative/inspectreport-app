@@ -143,7 +143,7 @@ function billingHtml() {
   if (b.subscribed) {
     const viaNote =
       b.subscribedVia === 'comp'
-        ? 'Complimentary access (founder / beta). All features unlocked.'
+        ? 'Complimentary access. All features unlocked, including PDF export.'
         : b.subscribedVia === 'stripe'
           ? 'Paid via Stripe. All features unlocked, including PDF export.'
           : 'Access granted. All features unlocked, including PDF export.';
@@ -173,14 +173,14 @@ function billingHtml() {
     </div>${adminBoxHtml(b)}`;
 }
 
-/* Admin-only: grant/revoke subscription access for beta testers by email.
+/* Admin-only: grant/revoke subscription access by email.
    Rendered solely when /api/billing says the signed-in user is an admin. */
 function adminBoxHtml(b) {
   if (!b.isAdmin) return '';
   return `
     <div class="admin-box">
       <h3 class="admin-title">Manage access <small>(admin)</small></h3>
-      <p class="muted small">Grant or revoke subscription access for a beta tester by the email on their account.</p>
+      <p class="muted small">Grant or revoke subscription access by the email on the account.</p>
       <div class="row-gap">
         <input type="email" class="inline-input admin-email" placeholder="tester@example.com" />
         <button class="btn btn-amber btn-sm admin-grant">Grant access</button>
