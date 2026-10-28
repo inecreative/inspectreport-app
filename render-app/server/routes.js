@@ -159,12 +159,19 @@ router.get('/auth/me', (req, res) => {
 router.get(
   '/billing',
   wrap(async (req, res) => {
-    let subscribed = false;
-    let subscribedVia = null;
+    let state = {
+      subscribed: false,
+      subscribedVia: null,
+      hasPdfAccess: false,
+      accessVia: null,
+      inTrial: false,
+      trialEndsAt: null,
+      trialDaysLeft: 0,
+    };
     let isAdmin = false;
     if (req.user) {
       const row = await access.userById(req.user.id);
-      ({ subscribed, subscribedVia } = access.subscriptionState(row || req.user));
+      state = access.pdfAccessState(row || req.user);
       isAdmin = access.isAdminEmail(req.user.email);
     }
     res.json({
@@ -172,8 +179,13 @@ router.get(
       priceMonthly: 49,
       paymentLinkUrl: process.env.PAYMENT_LINK_URL || null,
       aiEnabled: ai.aiConfigured(),
-      subscribed,
-      subscribedVia,
+      subscribed: state.subscribed,
+      subscribedVia: state.subscribedVia,
+      pdfAccess: state.hasPdfAccess,
+      accessVia: state.accessVia,
+      inTrial: state.inTrial,
+      trialEndsAt: state.trialEndsAt,
+      trialDaysLeft: state.trialDaysLeft,
       isAdmin,
     });
   })
