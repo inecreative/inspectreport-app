@@ -128,7 +128,16 @@ async function loadBilling() {
   try {
     state.billing = await api('/api/billing');
   } catch (_) {
-    state.billing = { priceMonthly: 49, paymentLinkUrl: null, subscribed: false, isAdmin: false };
+    state.billing = {
+      priceMonthly: 49,
+      paymentLinkUrl: null,
+      subscribed: false,
+      pdfAccess: false,
+      inTrial: false,
+      trialEndsAt: null,
+      trialDaysLeft: 0,
+      isAdmin: false,
+    };
   }
   renderBilling();
   updatePdfButton();
@@ -136,6 +145,15 @@ async function loadBilling() {
 
 function isSubscribed() {
   return Boolean(state.billing && state.billing.subscribed);
+}
+
+/* PDF export is unlocked by a subscription, a comp grant, or the free
+   3-day trial every new account starts with. */
+function hasPdfAccess() {
+  const b = state.billing;
+  if (!b) return false;
+  if (typeof b.pdfAccess === 'boolean') return b.pdfAccess;
+  return Boolean(b.subscribed || b.inTrial);
 }
 
 function billingHtml() {
@@ -161,11 +179,15 @@ function billingHtml() {
     ? `<a class="btn btn-amber btn-big" href="${esc(b.paymentLinkUrl)}" target="_blank" rel="noopener">Subscribe — $${b.priceMonthly}/mo</a>`
     : `<button class="btn btn-amber btn-big" disabled>Subscribe — $${b.priceMonthly}/mo</button>
        <p class="muted small">Payments are not live yet — the Subscribe button activates once the payment link is configured.</p>`;
+  const trialNote = b.inTrial
+    ? `<p class="muted"><b>Free trial — ${b.trialDaysLeft} day${b.trialDaysLeft === 1 ? '' : 's'} left.</b> Your trial includes full PDF export. After that, $${b.priceMonthly}/mo keeps PDF export.</p>`
+    : '';
   return `
     <h2>Billing</h2>
     <div class="billing-inner">
       <div>
         <div class="billing-price">$${b.priceMonthly}<small>/mo flat per account</small></div>
+        ${trialNote}
         <p class="muted">Unlimited reports. No per-inspector fees, no promo pricing that doubles later.</p>
         <p class="muted small">Reports and the live preview are free — the plan unlocks PDF export.</p>
       </div>
@@ -744,9 +766,10 @@ function renderPreview() {
 
 /**
  * Header PDF button states:
- *  - no report open          -> disabled, default label
- *  - report open, subscribed -> enabled, normal download
- *  - report open, free plan   -> enabled but locked (🔒 PDF — Pro);
+ *  - no report open            -> disabled, default label
+ *  - report open, has access   -> enabled, normal download (subscription,
+ *    comp grant, or the free 3-day trial every new account starts with)
+ *  - report open, no access    -> enabled but locked (🔒 PDF — Pro);
  *    clicking it opens the upgrade prompt instead of generating a PDF.
  * Reports, editing and the live preview are always free.
  */
@@ -759,7 +782,7 @@ function updatePdfButton() {
     return;
   }
   btn.disabled = false;
-  if (isSubscribed()) {
+  if (hasPdfAccess()) {
     btn.classList.remove('btn-locked');
     btn.textContent = '⬇ Download PDF';
   } else {
@@ -794,7 +817,7 @@ $('#pdfBtn').addEventListener('click', async () => {
   // Refresh billing right before deciding, so a just-granted or
   // just-paid subscription takes effect without a page reload.
   await loadBilling();
-  if (!isSubscribed()) {
+  if (!hasPdfAccess()) {
     openUpgrade();
     return;
   }
