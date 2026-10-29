@@ -58,6 +58,11 @@ const SCHEMA = [
      existing users default to unsubscribed. */
   `ALTER TABLE users ADD COLUMN IF NOT EXISTS subscribed BOOLEAN NOT NULL DEFAULT false`,
   `ALTER TABLE users ADD COLUMN IF NOT EXISTS subscribed_via TEXT`,
+  /* Profile fields shown/edited on the User Profile page (full name,
+     company, phone). Idempotent like the subscription columns above. */
+  `ALTER TABLE users ADD COLUMN IF NOT EXISTS full_name TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE users ADD COLUMN IF NOT EXISTS company_name TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE users ADD COLUMN IF NOT EXISTS phone TEXT NOT NULL DEFAULT ''`,
   `CREATE TABLE IF NOT EXISTS sessions (
      token TEXT PRIMARY KEY,
      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
