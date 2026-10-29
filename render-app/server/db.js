@@ -111,6 +111,12 @@ const SCHEMA = [
      size INTEGER NOT NULL DEFAULT 0,
      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
    )`,
+  /* Report cover ("house photo"): the id of a photos row shown at the
+     top of the report preview and the PDF. Plain INTEGER (no FK) so the
+     migration stays trivially idempotent; routes validate ownership.
+     Must run AFTER the reports table exists (production DBs created
+     before this column upgrade on boot, like the users columns above). */
+  `ALTER TABLE reports ADD COLUMN IF NOT EXISTS cover_photo_id INTEGER`,
 ];
 
 async function init() {
