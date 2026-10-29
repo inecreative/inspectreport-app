@@ -87,6 +87,9 @@ async function fullReport(userId, reportId) {
     const f = photo.finding_id != null ? byId.get(photo.finding_id) : null;
     if (f) f.photos.push(photo);
   }
+  // The house photo (report cover), if one is set and still exists.
+  const cover = report.cover_photo_id ? photos.find((p) => p.id === report.cover_photo_id) : null;
+  report.cover_url = cover ? cover.url : null;
   return { report, customFields: fields.rows, findings, photos };
 }
 
@@ -422,6 +425,20 @@ router.put(
     if (req.body.inspection_date !== undefined) {
       values.push(req.body.inspection_date || null);
       sets.push(`inspection_date = $${values.length}`);
+    }
+    if (req.body.cover_photo_id !== undefined) {
+      let coverId = req.body.cover_photo_id;
+      if (coverId !== null) {
+        coverId = Number(coverId);
+        // The cover must be one of this report's own photos.
+        const { rows: coverRows } = await db.query(
+          'SELECT id FROM photos WHERE id = $1 AND report_id = $2',
+          [coverId, report.id]
+        );
+        if (!coverRows.length) return res.status(400).json({ error: 'Cover photo not found for this report.' });
+      }
+      values.push(coverId);
+      sets.push(`cover_photo_id = $${values.length}`);
     }
     if (sets.length) {
       sets.push('updated_at = now()');
@@ -779,6 +796,8 @@ router.delete(
     );
     if (!rows.length) return res.status(404).json({ error: 'Photo not found.' });
     await db.query('DELETE FROM photos WHERE id = $1', [rows[0].id]);
+    // If the deleted photo was the report's cover, clear the cover.
+    await db.query('UPDATE reports SET cover_photo_id = NULL WHERE cover_photo_id = $1', [rows[0].id]);
     await fs.promises.unlink(path.join(UPLOAD_DIR, path.basename(rows[0].filename))).catch(() => {});
     await touchReport(rows[0].report_id);
     return res.json({ ok: true });
