@@ -26,6 +26,7 @@
       <span id="pdfStatus" class="pdf-status" aria-live="polite"></span>
       <button id="pdfBtn" class="btn btn-primary" disabled>⬇ Download PDF</button>
       <span id="userArea" class="user-area hidden">
+        <button id="profileBtn" class="btn btn-ghost profile-btn" title="User profile" aria-label="User profile">👤</button>
         <span id="userEmail" class="user-email"></span>
         <button id="logoutBtn" class="btn btn-ghost">Log out</button>
       </span>
@@ -77,8 +78,6 @@
       </div>
       <p id="listEmpty" class="muted hidden">No reports yet. Create one, or load the sample job to see how it works.</p>
       <div id="reportList" class="report-list"></div>
-
-      <div class="card billing-card" id="billingCardList"></div>
     </div>
 
     <!-- Report editor -->
@@ -177,7 +176,6 @@
         <button id="summarizeBtn" class="btn btn-navy">✨ Generate summary with AI</button>
       </div>
 
-      <div class="card billing-card" id="billingCardEditor"></div>
       </div><!-- /.editor-col -->
 
       <div class="preview-wrap">
@@ -185,6 +183,35 @@
         <div id="preview" class="preview"></div>
       </div>
       </div><!-- /.editor-grid -->
+    </div>
+
+    <!-- User profile -->
+    <div id="profileView" class="hidden">
+      <div class="row-between">
+        <button id="profileBackBtn" class="btn btn-ghost">← All reports</button>
+      </div>
+      <div class="profile-col">
+        <h1>User profile</h1>
+        <div class="card">
+          <h2>Your details</h2>
+          <form id="profileForm">
+            <div class="grid-2">
+              <label class="field"><span>Full name</span>
+                <input type="text" id="p_full_name" autocomplete="name" placeholder="Alex Carter" /></label>
+              <label class="field"><span>Company name</span>
+                <input type="text" id="p_company_name" autocomplete="organization" placeholder="Carter Home Inspections LLC" /></label>
+              <label class="field"><span>Phone</span>
+                <input type="tel" id="p_phone" autocomplete="tel" placeholder="(512) 555-0147" /></label>
+              <label class="field"><span>Email</span>
+                <input type="email" id="p_email" disabled /></label>
+            </div>
+            <p id="profileMsg" class="muted small" aria-live="polite"></p>
+            <button type="submit" class="btn btn-amber">Save profile</button>
+          </form>
+        </div>
+
+        <div class="card billing-card" id="billingCardProfile"></div>
+      </div>
     </div>
   </section>
 </main>
