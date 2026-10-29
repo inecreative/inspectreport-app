@@ -147,12 +147,18 @@ async function downloadReportPdf(data, setStatus) {
     const fillColor = (rgb) => doc.setFillColor(rgb[0], rgb[1], rgb[2]);
 
     /* ---------- House photo (report cover, top of the document) ---------- */
+    // The cover and the navy header form ONE flush unit, exactly like the
+    // preview card: no gap between them, and when a cover is present the
+    // header block is a plain rectangle (square top corners) so the two
+    // blocks meet seamlessly.
+    let hasCover = false;
     if (report.cover_url) {
       try {
         const { dataUrl } = await imageToDataUrl(report.cover_url);
         const cover = await coverCroppedDataUrl(dataUrl, contentW, 138);
         doc.addImage(cover, 'JPEG', margin, y, contentW, 138);
-        y += 138 + 16;
+        y += 138;
+        hasCover = true;
       } catch (_) {
         /* skip a cover that cannot be loaded */
       }
@@ -167,12 +173,20 @@ async function downloadReportPdf(data, setStatus) {
     );
     const headH = 13 + 17 + 9 + addrLines.length * 23 + 7 + 13 + 15;
     fillColor(C.navy);
-    doc.roundedRect(margin, y, contentW, headH, 7, 7, 'F');
-    // Amber badge
+    if (hasCover) {
+      doc.rect(margin, y, contentW, headH, 'F');
+    } else {
+      doc.roundedRect(margin, y, contentW, headH, 7, 7, 'F');
+    }
+    // Amber badge. NOTE: jsPDF's getTextWidth does NOT include the
+    // per-character spacing set via setCharSpace, so add it manually —
+    // otherwise the badge box comes out too narrow and the end of the
+    // text spills off the amber onto the navy.
     const badgeText = 'HOME INSPECTION REPORT';
+    const badgeCharSpace = 0.5;
     doc.setFontSize(8.5);
-    doc.setCharSpace(0.5);
-    const badgeW = doc.getTextWidth(badgeText) + 18;
+    doc.setCharSpace(badgeCharSpace);
+    const badgeW = doc.getTextWidth(badgeText) + badgeText.length * badgeCharSpace + 22;
     fillColor(C.badgeAmber);
     doc.roundedRect(bodyX, y + 13, badgeW, 17, 4, 4, 'F');
     doc.setTextColor(17, 24, 39);
