@@ -156,6 +156,51 @@ router.get('/auth/me', (req, res) => {
 });
 
 /* ------------------------------------------------------------------ */
+/* User profile (User Profile page: full name, company name, phone)    */
+/* ------------------------------------------------------------------ */
+
+function profileJson(u) {
+  return {
+    email: u.email,
+    fullName: u.full_name || '',
+    companyName: u.company_name || '',
+    phone: u.phone || '',
+  };
+}
+
+router.get(
+  '/profile',
+  auth.requireAuth,
+  wrap(async (req, res) => {
+    const { rows } = await db.query(
+      'SELECT email, full_name, company_name, phone FROM users WHERE id = $1',
+      [req.user.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Account not found.' });
+    return res.json({ profile: profileJson(rows[0]) });
+  })
+);
+
+router.put(
+  '/profile',
+  auth.requireAuth,
+  wrap(async (req, res) => {
+    const body = req.body || {};
+    const fullName = String(body.fullName ?? '').trim().slice(0, 120);
+    const companyName = String(body.companyName ?? '').trim().slice(0, 120);
+    const phone = String(body.phone ?? '').trim().slice(0, 40);
+    const { rows } = await db.query(
+      `UPDATE users SET full_name = $1, company_name = $2, phone = $3
+        WHERE id = $4
+        RETURNING email, full_name, company_name, phone`,
+      [fullName, companyName, phone, req.user.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Account not found.' });
+    return res.json({ profile: profileJson(rows[0]) });
+  })
+);
+
+/* ------------------------------------------------------------------ */
 /* Billing                                                             */
 /* ------------------------------------------------------------------ */
 
@@ -449,9 +494,15 @@ router.post(
   '/reports',
   auth.requireAuth,
   wrap(async (req, res) => {
+    // New reports start with the inspector name from the user's profile,
+    // so they don't retype it on every job (still editable per report).
+    const { rows: urows } = await db.query('SELECT full_name FROM users WHERE id = $1', [
+      req.user.id,
+    ]);
+    const inspectorName = (urows[0] && urows[0].full_name) || '';
     const { rows } = await db.query(
-      'INSERT INTO reports (user_id) VALUES ($1) RETURNING id',
-      [req.user.id]
+      'INSERT INTO reports (user_id, inspector_name) VALUES ($1, $2) RETURNING id',
+      [req.user.id, inspectorName]
     );
     res.status(201).json({ report: await byId('reports', rows[0].id) });
   })
