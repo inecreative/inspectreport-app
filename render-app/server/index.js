@@ -28,6 +28,9 @@ const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 // itself (with its built-in sign-in view) lives at /app.
 app.get('/', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'landing.html')));
 app.get('/app', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'app.html')));
+app.get('/spectora-alternative', (req, res) =>
+  res.sendFile(path.join(PUBLIC_DIR, 'spectora-alternative.html'))
+);
 app.use(
   express.static(PUBLIC_DIR, {
     index: false,
