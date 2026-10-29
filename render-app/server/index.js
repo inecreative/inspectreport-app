@@ -28,7 +28,17 @@ const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 // itself (with its built-in sign-in view) lives at /app.
 app.get('/', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'landing.html')));
 app.get('/app', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'app.html')));
-app.use(express.static(PUBLIC_DIR, { index: false }));
+app.use(
+  express.static(PUBLIC_DIR, {
+    index: false,
+    setHeaders: (res, filePath) => {
+      // App code and styles must never be served stale after a redeploy:
+      // force revalidation on every load (ETags keep this cheap), so the
+      // next page refresh always picks up the newest app.js/pdf.js/CSS.
+      if (/\.(html|js|css)$/.test(filePath)) res.setHeader('Cache-Control', 'no-cache');
+    },
+  })
+);
 
 // JSON error handler (multer upload errors land here too).
 // eslint-disable-next-line no-unused-vars
