@@ -812,7 +812,7 @@ function renderPreview() {
         <dl class="meta">
           ${rows.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}
         </dl>
-        ${report.summary ? `<h3>Executive summary</h3><div class="summary-box">${esc(report.summary)}</div>` : ''}
+        ${report.summary ? `<h3>Executive summary</h3><div class="summary-box">${esc(report.summary)}</div><div class="section-divider"></div>` : ''}
         <h3>Findings (${findings.length})</h3>
         ${
           findings.length
