@@ -443,7 +443,8 @@ select.sev-Urgent { color: var(--red); font-weight: 700; }
 .r-line b { font-size: 15.5px; }
 .r-detail { margin: 7px 0 0; font-size: 15px; line-height: 1.65; }
 .r-photos { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
-.r-photos img { width: 96px; height: 72px; object-fit: cover; border-radius: 8px; }
+.r-photos img { width: 192px; height: 144px; object-fit: cover; border-radius: 8px; }
+.section-divider { border-top: 2px solid #C4C9D1; margin: 22px 0 0; }
 .r-empty { font-size: 14.5px; color: #6B7280; }
 .pill {
   display: inline-flex;
