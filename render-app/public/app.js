@@ -7,6 +7,7 @@ const $ = (sel) => document.querySelector(sel);
 const state = {
   user: null,
   billing: null,
+  profile: null,
   templates: [],
   current: null, // { report, customFields, findings, photos }
   authMode: 'login', // or 'signup'
@@ -117,6 +118,10 @@ $('#logoutBtn').addEventListener('click', async () => {
   await api('/api/auth/logout', { method: 'POST' }).catch(() => {});
   state.user = null;
   state.current = null;
+  state.profile = null;
+  $('#profileView').classList.add('hidden');
+  $('#editorView').classList.add('hidden');
+  $('#listView').classList.remove('hidden');
   showAuth();
 });
 
@@ -264,7 +269,7 @@ async function adminAccess(card, grant) {
 
 function renderBilling() {
   const b = state.billing || {};
-  for (const id of ['#billingCardList', '#billingCardEditor']) {
+  for (const id of ['#billingCardProfile']) {
     const el = $(id);
     if (!el) continue;
     el.innerHTML = billingHtml();
@@ -275,6 +280,66 @@ function renderBilling() {
     if (b.isAdmin) loadAdminStats(el);
   }
 }
+
+/* ---------------------------------------------------------------- */
+/* User profile (details form + the billing plan live on this page)  */
+/* ---------------------------------------------------------------- */
+
+async function loadProfile() {
+  try {
+    const { profile } = await api('/api/profile');
+    state.profile = profile;
+  } catch (_) {
+    state.profile = null;
+  }
+  const p = state.profile || {};
+  $('#p_full_name').value = p.fullName || '';
+  $('#p_company_name').value = p.companyName || '';
+  $('#p_phone').value = p.phone || '';
+  $('#p_email').value = p.email || (state.user && state.user.email) || '';
+  $('#profileMsg').textContent = '';
+}
+
+function showProfile() {
+  $('#listView').classList.add('hidden');
+  $('#editorView').classList.add('hidden');
+  $('#profileView').classList.remove('hidden');
+  loadProfile();
+  renderBilling();
+}
+
+$('#profileBtn').addEventListener('click', showProfile);
+
+$('#profileBackBtn').addEventListener('click', async () => {
+  $('#profileView').classList.add('hidden');
+  if (state.current) {
+    $('#editorView').classList.remove('hidden');
+  } else {
+    $('#listView').classList.remove('hidden');
+    await loadReports();
+  }
+  updatePdfButton();
+});
+
+$('#profileForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const msg = $('#profileMsg');
+  msg.textContent = 'Saving…';
+  try {
+    const { profile } = await api('/api/profile', {
+      method: 'PUT',
+      body: JSON.stringify({
+        fullName: $('#p_full_name').value,
+        companyName: $('#p_company_name').value,
+        phone: $('#p_phone').value,
+      }),
+    });
+    state.profile = profile;
+    msg.textContent = '✓ Profile saved.';
+  } catch (err) {
+    msg.textContent = err.message;
+  }
+});
 
 /* ---------------------------------------------------------------- */
 /* Reports list                                                      */
@@ -329,6 +394,7 @@ async function openReport(id) {
 
 function showEditor() {
   $('#listView').classList.add('hidden');
+  $('#profileView').classList.add('hidden');
   $('#editorView').classList.remove('hidden');
   updatePdfButton();
   const r = state.current.report;
@@ -347,6 +413,7 @@ function showEditor() {
 $('#backBtn').addEventListener('click', async () => {
   state.current = null;
   $('#editorView').classList.add('hidden');
+  $('#profileView').classList.add('hidden');
   $('#listView').classList.remove('hidden');
   updatePdfButton();
   await loadReports();
@@ -358,6 +425,7 @@ $('#deleteReportBtn').addEventListener('click', async () => {
   await api(`/api/reports/${state.current.report.id}`, { method: 'DELETE' });
   state.current = null;
   $('#editorView').classList.add('hidden');
+  $('#profileView').classList.add('hidden');
   $('#listView').classList.remove('hidden');
   updatePdfButton();
   await loadReports();
