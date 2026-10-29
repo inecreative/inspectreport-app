@@ -126,6 +126,21 @@
 
       <div class="card">
         <h2>Photos</h2>
+        <div class="cover-block">
+          <div class="cover-info">
+            <h3 class="subhead">House photo (report cover)</h3>
+            <p class="muted small">Shown at the very top of the report — in the preview and in the PDF.</p>
+            <div class="row-gap">
+              <label class="btn btn-navy btn-file btn-sm">
+                ⬆ <span id="coverBtnText">Upload house photo</span>
+                <input type="file" id="coverInput" accept="image/jpeg,image/png,image/webp,image/gif" hidden />
+              </label>
+              <button id="coverRemoveBtn" class="btn btn-danger-ghost btn-sm hidden">Remove</button>
+            </div>
+            <p id="coverError" class="error hidden"></p>
+          </div>
+          <img id="coverThumb" class="cover-thumb hidden" alt="House photo" />
+        </div>
         <div class="row-gap wrap">
           <label class="btn btn-navy btn-file">
             ⬆ Upload photos
