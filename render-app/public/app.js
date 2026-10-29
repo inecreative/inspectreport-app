@@ -548,7 +548,59 @@ function renderPhotos() {
     state.current.findings
       .map((f) => `<option value="${f.id}">${esc(f.area)} — ${esc(f.title)}</option>`)
       .join('');
+  renderCover();
 }
+
+/* --- House photo (report cover) --- */
+function renderCover() {
+  const url = state.current && state.current.report.cover_url;
+  const thumb = $('#coverThumb');
+  const removeBtn = $('#coverRemoveBtn');
+  if (!thumb || !removeBtn) return;
+  thumb.classList.toggle('hidden', !url);
+  removeBtn.classList.toggle('hidden', !url);
+  if (url) thumb.src = url;
+  $('#coverBtnText').textContent = url ? 'Change house photo' : 'Upload house photo';
+}
+
+$('#coverInput').addEventListener('change', async (e) => {
+  const file = e.target.files && e.target.files[0];
+  if (!file || !state.current) return;
+  const errBox = $('#coverError');
+  errBox.classList.add('hidden');
+  try {
+    const form = new FormData();
+    form.append('photos', file);
+    const res = await fetch(`/api/reports/${state.current.report.id}/photos`, {
+      method: 'POST',
+      credentials: 'same-origin',
+      body: form,
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) throw new Error((data && data.error) || 'Upload failed.');
+    const photo = data && data.photos && data.photos[0];
+    if (!photo) throw new Error('Upload failed.');
+    await api(`/api/reports/${state.current.report.id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ cover_photo_id: photo.id }),
+    });
+    await refreshCurrent();
+  } catch (err) {
+    errBox.textContent = err.message;
+    errBox.classList.remove('hidden');
+  } finally {
+    e.target.value = '';
+  }
+});
+
+$('#coverRemoveBtn').addEventListener('click', async () => {
+  if (!state.current) return;
+  await api(`/api/reports/${state.current.report.id}`, {
+    method: 'PUT',
+    body: JSON.stringify({ cover_photo_id: null }),
+  });
+  await refreshCurrent();
+});
 
 $('#photoInput').addEventListener('change', async (e) => {
   const files = e.target.files;
@@ -606,13 +658,16 @@ function renderFindings() {
           <button class="btn btn-navy btn-sm" data-polish="${f.id}">✨ Polish</button>
           <button class="btn btn-danger-ghost btn-sm" data-del-finding="${f.id}">Delete</button>
         </div>
-        ${
-          f.photos && f.photos.length
-            ? `<div class="finding-photos">${f.photos
-                .map((p) => `<img src="${esc(p.url)}" alt="${esc(p.original_name || 'Finding photo')}" />`)
-                .join('')}</div>`
-            : ''
-        }
+        <div class="finding-photos">
+          ${(f.photos || [])
+            .map(
+              (p) => `<span class="f-photo"><img src="${esc(p.url)}" alt="${esc(p.original_name || 'Finding photo')}" /><button class="f-photo-del" data-del-finding-photo="${p.id}" title="Remove photo">✕</button></span>`
+            )
+            .join('')}
+          <label class="f-photo-add">＋ Photo
+            <input type="file" data-finding-photo-input="${f.id}" accept="image/jpeg,image/png,image/webp,image/gif" multiple hidden />
+          </label>
+        </div>
       </div>`
     )
     .join('');
@@ -641,6 +696,35 @@ function renderFindings() {
   wrap.querySelectorAll('[data-del-finding]').forEach((btn) => {
     btn.addEventListener('click', async () => {
       await api(`/api/findings/${btn.dataset.delFinding}`, { method: 'DELETE' });
+      await refreshCurrent();
+    });
+  });
+  // Per-finding photo upload: posts straight to this finding.
+  wrap.querySelectorAll('[data-finding-photo-input]').forEach((input) => {
+    input.addEventListener('change', async (e) => {
+      const files = e.target.files;
+      if (!files.length || !state.current) return;
+      const form = new FormData();
+      for (const file of files) form.append('photos', file);
+      form.append('findingId', input.dataset.findingPhotoInput);
+      try {
+        const res = await fetch(`/api/reports/${state.current.report.id}/photos`, {
+          method: 'POST',
+          credentials: 'same-origin',
+          body: form,
+        });
+        if (!res.ok) throw new Error('Upload failed.');
+        await refreshCurrent();
+      } catch (err) {
+        window.alert(err.message);
+      } finally {
+        e.target.value = '';
+      }
+    });
+  });
+  wrap.querySelectorAll('[data-del-finding-photo]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      await api(`/api/photos/${btn.dataset.delFindingPhoto}`, { method: 'DELETE' });
       await refreshCurrent();
     });
   });
@@ -718,6 +802,7 @@ function renderPreview() {
   ];
   $('#preview').innerHTML = `
     <article class="report">
+      ${report.cover_url ? `<img class="report-cover" src="${esc(report.cover_url)}" alt="Property photo" />` : ''}
       <div class="report-head">
         <span class="badge">Home Inspection Report</span>
         <h1>${esc(report.address || 'Add a property address to start your report')}</h1>
