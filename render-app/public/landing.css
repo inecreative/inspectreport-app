@@ -96,6 +96,27 @@ img { max-width: 100%; display: block; }
 .section-sub { font-size: 17px; color: var(--muted); max-width: 680px; margin: 0 0 8px; }
 .fineprint { font-size: 13px; color: var(--muted); }
 
+/* ---------- trial banner + badge ---------- */
+.trial-banner { background: var(--amber); color: #fff; }
+.trial-banner-inner {
+  display: flex; align-items: center; justify-content: space-between; gap: 18px;
+  padding-top: 13px; padding-bottom: 13px; flex-wrap: wrap;
+}
+.trial-banner-text { margin: 0; font-size: 16.5px; font-weight: 600; }
+.trial-banner-text b { font-weight: 800; }
+.trial-banner-btn { font-weight: 800; white-space: nowrap; }
+.trial-badge {
+  display: inline-block; margin: 0 0 14px; padding: 8px 16px;
+  background: var(--amber-light); color: var(--amber-text);
+  border: 1.5px solid var(--amber); border-radius: 999px;
+  font-family: 'Archivo', sans-serif; font-size: 16px; font-weight: 700;
+}
+.trial-pill {
+  display: inline-block; background: var(--amber); color: #fff;
+  font-size: 13px; font-weight: 800; letter-spacing: .08em;
+  padding: 3px 10px; border-radius: 999px; vertical-align: 3px; margin-right: 6px;
+}
+
 /* ---------- hero ---------- */
 .hero { background: var(--bg); padding: 64px 0 80px; border-bottom: 1px solid var(--line2); }
 .hero-grid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 48px; align-items: center; }
@@ -234,13 +255,48 @@ img { max-width: 100%; display: block; }
 .step-body p:last-child { margin: 0; font-size: 14.5px; color: #374151; }
 
 /* ---------- math + pricing ---------- */
-.math-table-wrap { overflow-x: auto; margin-top: 24px; border: 1px solid var(--line); border-radius: var(--radius); }
-.math-table { width: 100%; border-collapse: collapse; font-size: 15.5px; min-width: 560px; }
-.math-table th, .math-table td { padding: 13px 18px; text-align: left; }
-.math-table thead th { background: var(--surface2); font-size: 12.5px; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
-.math-table tbody tr + tr td { border-top: 1px solid var(--line2); }
-.math-table tr.math-us { background: var(--amber-light); }
-.math-table tr.math-us td { color: var(--amber-text); }
+/* ---------- price comparison (horizontal bars) ---------- */
+.compare {
+  margin-top: 28px; border: 1.5px solid var(--line); border-radius: var(--radius);
+  background: var(--surface); box-shadow: var(--shadow); padding: 26px 30px 22px;
+}
+.compare-head {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
+  padding-bottom: 14px; border-bottom: 1px solid var(--line2); margin-bottom: 8px;
+}
+.compare-head-label {
+  font-family: 'Archivo', sans-serif; font-size: 15px; font-weight: 800;
+  letter-spacing: .06em; text-transform: uppercase; color: var(--navy);
+}
+.compare-head-scale { font-size: 13px; color: var(--muted); }
+.compare-row {
+  display: grid; grid-template-columns: 210px minmax(0, 1fr) 170px;
+  gap: 20px; align-items: center; padding: 18px 0;
+}
+.compare-row + .compare-row { border-top: 1px dashed var(--line2); }
+.compare-name b { display: block; font-family: 'Archivo', sans-serif; font-size: 21px; font-weight: 800; color: var(--navy); }
+.compare-name small { display: block; font-size: 13.5px; color: var(--muted); margin-top: 2px; }
+.compare-track { min-width: 0; }
+.compare-bar { height: 30px; border-radius: 7px; }
+.bar-other { background: #C9CED6; }
+.bar-us { background: var(--amber); min-width: 46px; }
+.compare-catch { margin: 7px 0 0; font-size: 14px; color: var(--muted); }
+.compare-price {
+  font-family: 'Archivo', sans-serif; font-size: 36px; font-weight: 800;
+  color: var(--navy); text-align: right; line-height: 1; white-space: nowrap;
+}
+.compare-price small { font-size: 15px; font-weight: 600; color: var(--muted); margin-left: 4px; }
+.compare-us {
+  background: var(--amber-light); border: 1.5px solid var(--amber); border-radius: var(--radius-sm);
+  padding-left: 16px; padding-right: 16px; margin: 6px -16px 2px;
+}
+.compare-us .compare-name b, .compare-us .compare-price { color: var(--amber-text); }
+.compare-us .compare-catch { color: var(--amber-text); }
+.compare-savings {
+  margin: 16px 0 2px; padding-top: 14px; border-top: 1px solid var(--line2);
+  font-size: 17.5px; color: var(--navy);
+}
+.compare-savings b { color: var(--amber-text); }
 .pricing-card {
   margin-top: 28px; background: var(--navy); color: #fff; border-radius: var(--radius);
   display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); overflow: hidden;
@@ -256,7 +312,7 @@ img { max-width: 100%; display: block; }
   background: var(--navy2); padding: 32px 36px;
   display: flex; flex-direction: column; justify-content: center; gap: 12px;
 }
-.pricing-beta { margin: 0; font-family: 'Archivo', sans-serif; font-size: 22px; font-weight: 800; color: #fff; }
+.pricing-beta { margin: 0; font-family: 'Archivo', sans-serif; font-size: 26px; font-weight: 800; color: #fff; }
 .pricing-side p:not(.pricing-beta) { margin: 0; font-size: 15px; color: rgba(255,255,255,.85); }
 
 /* ---------- InterNACHI ---------- */
@@ -308,6 +364,12 @@ img { max-width: 100%; display: block; }
   .lp-header-inner { flex-wrap: wrap; gap: 12px; }
   .lp-header-actions { margin-left: auto; }
   .pricing-main, .pricing-side, .inachi-card { padding: 26px 22px; }
+  .compare { padding: 20px 16px 16px; }
+  .compare-row { grid-template-columns: minmax(0, 1fr) auto; gap: 6px 14px; }
+  .compare-track { grid-column: 1 / -1; order: 3; }
+  .compare-price { font-size: 30px; }
+  .compare-us { margin-left: -8px; margin-right: -8px; padding-left: 10px; padding-right: 10px; }
+  .trial-banner-inner { justify-content: center; text-align: center; }
   .report-body { padding: 18px 16px; }
   .report-head { padding: 18px 16px; }
 }
