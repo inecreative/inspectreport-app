@@ -195,12 +195,14 @@ function billingHtml() {
     </div>${adminBoxHtml(b)}`;
 }
 
-/* Admin-only: grant/revoke subscription access by email.
+/* Admin-only: site stats + grant/revoke subscription access by email.
    Rendered solely when /api/billing says the signed-in user is an admin. */
 function adminBoxHtml(b) {
   if (!b.isAdmin) return '';
   return `
     <div class="admin-box">
+      <h3 class="admin-title">Site stats <small>(admin)</small></h3>
+      <div class="admin-stats-body"><p class="muted small">Loading stats…</p></div>
       <h3 class="admin-title">Manage access <small>(admin)</small></h3>
       <p class="muted small">Grant or revoke subscription access by the email on the account.</p>
       <div class="row-gap">
@@ -210,6 +212,29 @@ function adminBoxHtml(b) {
       </div>
       <p class="small admin-status" aria-live="polite"></p>
     </div>`;
+}
+
+async function loadAdminStats(card) {
+  const body = card.querySelector('.admin-stats-body');
+  if (!body) return;
+  try {
+    const s = await api('/api/admin/stats');
+    const recent = (s.recent || [])
+      .slice(0, 5)
+      .map((u) => `${esc(u.email)} (${String(u.created_at).slice(0, 10)})`)
+      .join(' · ');
+    body.innerHTML = `
+      <div class="stats-row">
+        <div class="stat"><div class="stat-num">${s.totalUsers}</div><div class="stat-label">Total signups</div></div>
+        <div class="stat"><div class="stat-num">${s.new7d}</div><div class="stat-label">New · last 7 days</div></div>
+        <div class="stat"><div class="stat-num">${s.subscribed}</div><div class="stat-label">Subscribed</div></div>
+        <div class="stat"><div class="stat-num">${s.inTrial}</div><div class="stat-label">In free trial</div></div>
+        <div class="stat"><div class="stat-num">${s.totalReports}</div><div class="stat-label">Reports created</div></div>
+      </div>
+      ${recent ? `<p class="muted small">Newest signups: ${recent}</p>` : ''}`;
+  } catch (err) {
+    body.innerHTML = '<p class="muted small">Stats unavailable right now.</p>';
+  }
 }
 
 async function adminAccess(card, grant) {
@@ -238,6 +263,7 @@ async function adminAccess(card, grant) {
 }
 
 function renderBilling() {
+  const b = state.billing || {};
   for (const id of ['#billingCardList', '#billingCardEditor']) {
     const el = $(id);
     if (!el) continue;
@@ -246,6 +272,7 @@ function renderBilling() {
     const revokeBtn = el.querySelector('.admin-revoke');
     if (grantBtn) grantBtn.addEventListener('click', () => adminAccess(el, true));
     if (revokeBtn) revokeBtn.addEventListener('click', () => adminAccess(el, false));
+    if (b.isAdmin) loadAdminStats(el);
   }
 }
 
