@@ -126,6 +126,18 @@ a { color: inherit; }
   padding: 8px 14px;
   font-size: 14px;
 }
+.app-header .profile-btn {
+  border-radius: 999px;
+  width: 40px;
+  padding: 8px 0;
+  font-size: 17px;
+  line-height: 1;
+}
+/* User profile page: a single readable column (details + billing plan). */
+.profile-col { max-width: 760px; margin: 10px auto 0; }
+.profile-col h1 { margin: 10px 0 16px; }
+.profile-col .card { margin-bottom: 18px; }
+.profile-col input[disabled] { background: #EFECE5; color: var(--muted, #6B7280); }
 @media (max-width: 720px) { .user-email { display: none; } }
 @media (max-width: 640px) {
   .header-inner { padding: 10px 14px; gap: 10px; min-height: 64px; }
