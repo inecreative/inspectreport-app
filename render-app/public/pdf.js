@@ -72,6 +72,48 @@ function imageSize(dataUrl) {
 }
 
 /**
+ * Cover-crop an image to the target aspect (like CSS object-fit: cover),
+ * so PDF photos are never stretched. Returns a JPEG data URL rendered at
+ * 2x the target point size. Falls back to the original image on failure.
+ */
+function coverCroppedDataUrl(dataUrl, targetW, targetH) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const ratio = targetW / targetH;
+        const srcRatio = img.naturalWidth / img.naturalHeight;
+        let sw;
+        let sh;
+        let sx;
+        let sy;
+        if (srcRatio > ratio) {
+          sh = img.naturalHeight;
+          sw = sh * ratio;
+          sx = (img.naturalWidth - sw) / 2;
+          sy = 0;
+        } else {
+          sw = img.naturalWidth;
+          sh = sw / ratio;
+          sx = 0;
+          sy = (img.naturalHeight - sh) / 2;
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(targetW * 2);
+        canvas.height = Math.round(targetH * 2);
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', 0.88));
+      } catch (_) {
+        resolve(dataUrl);
+      }
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
+}
+
+/**
  * @param {object} data — full report payload { report, customFields, findings }
  * @param {(msg: string) => void} setStatus — status text near the button
  */
@@ -103,6 +145,18 @@ async function downloadReportPdf(data, setStatus) {
     };
     const setColor = (rgb) => doc.setTextColor(rgb[0], rgb[1], rgb[2]);
     const fillColor = (rgb) => doc.setFillColor(rgb[0], rgb[1], rgb[2]);
+
+    /* ---------- House photo (report cover, top of the document) ---------- */
+    if (report.cover_url) {
+      try {
+        const { dataUrl } = await imageToDataUrl(report.cover_url);
+        const cover = await coverCroppedDataUrl(dataUrl, contentW, 138);
+        doc.addImage(cover, 'JPEG', margin, y, contentW, 138);
+        y += 138 + 16;
+      } catch (_) {
+        /* skip a cover that cannot be loaded */
+      }
+    }
 
     /* ---------- Header block (navy card head) ---------- */
     doc.setFont('helvetica', 'bold');
@@ -302,9 +356,10 @@ async function downloadReportPdf(data, setStatus) {
           for (let q = 0; q < rowPhotos.length; q += 1) {
             try {
               // eslint-disable-next-line no-await-in-loop
-              const { dataUrl, type } = await imageToDataUrl(rowPhotos[q].url);
-              const fmt = type && type.includes('png') ? 'PNG' : 'JPEG';
-              doc.addImage(dataUrl, fmt, bodyX + q * (tw + gap), y, tw, th);
+              const { dataUrl } = await imageToDataUrl(rowPhotos[q].url);
+              // eslint-disable-next-line no-await-in-loop
+              const cropped = await coverCroppedDataUrl(dataUrl, tw, th);
+              doc.addImage(cropped, 'JPEG', bodyX + q * (tw + gap), y, tw, th);
             } catch (_) {
               /* skip a photo that cannot be loaded */
             }
