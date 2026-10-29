@@ -225,6 +225,66 @@ router.post(
   })
 );
 
+/* Admin: site stats for the founder (signup counts and activity).
+   Same comp-admin guard as /admin/access. Read-only. */
+router.get(
+  '/admin/stats',
+  auth.requireAuth,
+  wrap(async (req, res) => {
+    if (!access.isAdminEmail(req.user.email)) {
+      return res.status(403).json({ error: 'Admin access required.' });
+    }
+    const count = async (sql) => {
+      const { rows } = await db.query(sql);
+      return Number(rows[0].n || 0);
+    };
+    // "Today" boundary computed in JS (date_trunc is not portable to the
+    // in-memory fallback database).
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const { rows: todayRows } = await db.query(
+      'SELECT COUNT(*)::int AS n FROM users WHERE created_at >= $1',
+      [startOfToday.toISOString()]
+    );
+    const newToday = Number(todayRows[0].n || 0);
+    const [
+      totalUsers,
+      new7d,
+      new30d,
+      subscribed,
+      inTrial,
+      totalReports,
+      reports7d,
+    ] = await Promise.all([
+      count('SELECT COUNT(*)::int AS n FROM users'),
+      count(`SELECT COUNT(*)::int AS n FROM users WHERE created_at >= now() - interval '7 days'`),
+      count(`SELECT COUNT(*)::int AS n FROM users WHERE created_at >= now() - interval '30 days'`),
+      count('SELECT COUNT(*)::int AS n FROM users WHERE subscribed = true'),
+      // Trial-active: inside the 3-day free-trial window, not subscribed.
+      count(
+        `SELECT COUNT(*)::int AS n FROM users
+          WHERE subscribed = false AND created_at >= now() - interval '3 days'`
+      ),
+      count('SELECT COUNT(*)::int AS n FROM reports'),
+      count(`SELECT COUNT(*)::int AS n FROM reports WHERE created_at >= now() - interval '7 days'`),
+    ]);
+    const { rows: recent } = await db.query(
+      'SELECT email, created_at, subscribed, subscribed_via FROM users ORDER BY created_at DESC LIMIT 10'
+    );
+    return res.json({
+      totalUsers,
+      newToday,
+      new7d,
+      new30d,
+      subscribed,
+      inTrial,
+      totalReports,
+      reports7d,
+      recent,
+    });
+  })
+);
+
 /* ------------------------------------------------------------------ */
 /* Stripe webhook — automatic subscription enforcement.              */
 /*                                                                     */
