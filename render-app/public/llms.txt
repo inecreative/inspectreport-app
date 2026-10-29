@@ -1,0 +1,22 @@
+# InspectReport AI
+
+> AI home inspection report software for US home inspectors. Upload site photos, add short notes, and get a structured inspection report with severity badges, repair-cost estimates, and PDF export.
+
+## What it does
+- Turns photos + short field notes into a structured inspection report
+- Severity badges on every finding
+- Repair-cost estimates included in the report
+- PDF export
+- Live report preview while you build the report
+
+## Pricing
+- Free: account, reports, and live preview
+- Free 3-day Pro trial for every new account: full access including PDF export, no credit card required
+- Pro: $49/month flat per account after the trial — no per-inspector fees, no price that doubles after a promo period
+
+## Who it's for
+- Solo home inspectors and small inspection teams in the US who write reports from field photos and notes
+
+## Links
+- Website: https://inspect-report.com/
+- App: https://inspect-report.com/app
