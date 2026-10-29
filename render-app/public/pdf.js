@@ -281,6 +281,15 @@ async function downloadReportPdf(data, setStatus) {
         sy += 15.8;
       }
       y += boxH + 4;
+      // Clear section break between the summary and Findings: a rule
+      // across the body width, slightly stronger than the meta divider,
+      // so the two sections read as unmistakably separate blocks.
+      ensureSpace(58);
+      y += 8;
+      doc.setDrawColor(196, 201, 209);
+      doc.setLineWidth(1.4);
+      doc.line(bodyX, y, bodyX + bodyW, y);
+      y += 6;
     }
 
     /* ---------- Findings ---------- */
@@ -356,11 +365,11 @@ async function downloadReportPdf(data, setStatus) {
         y += 2;
       }
 
-      // Photos — thumbnail row like the preview (72×54 pt, wrap)
+      // Photos — thumbnail row like the preview, at 144×108 pt (wrap)
       const photos = f.photos || [];
       if (photos.length) {
-        const tw = 72;
-        const th = 54;
+        const tw = 144;
+        const th = 108;
         const gap = 6;
         const perRow = Math.max(1, Math.floor((bodyW + gap) / (tw + gap)));
         y += 5;
