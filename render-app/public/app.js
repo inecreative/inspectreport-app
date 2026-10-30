@@ -725,6 +725,8 @@ $('#photoInput').addEventListener('change', async (e) => {
 
 /* --- Findings --- */
 const SEVERITIES = ['Good', 'Monitor', 'Repair', 'Urgent'];
+// Findings that already auto-opened a successor card (once per finding per session).
+const autoSpawnedFor = new Set();
 
 function renderFindings() {
   const wrap = $('#findingList');
@@ -777,8 +779,31 @@ function renderFindings() {
       cost: Number(card.querySelector('.f-cost').value) || 0,
     });
     const save = async () => {
-      await api(`/api/findings/${id}`, { method: 'PUT', body: JSON.stringify(payload()) });
+      const p = payload();
+      await api(`/api/findings/${id}`, { method: 'PUT', body: JSON.stringify(p) });
+      // Auto-add: once the LAST finding has both a title and a description,
+      // open the next blank finding card right away (once per finding).
+      const findings = state.current.findings;
+      const isLast = findings.length > 0 && findings[findings.length - 1].id === id;
+      let spawned = false;
+      if (isLast && p.title.trim() && p.detail.trim() && !autoSpawnedFor.has(id)) {
+        autoSpawnedFor.add(id);
+        await api(`/api/reports/${state.current.report.id}/findings`, {
+          method: 'POST',
+          body: JSON.stringify({}),
+        });
+        spawned = true;
+      }
       await refreshCurrent();
+      if (spawned) {
+        const cards = document.querySelectorAll('#findingList .finding');
+        const lastCard = cards[cards.length - 1];
+        if (lastCard) {
+          lastCard.scrollIntoView({ block: 'nearest' });
+          const titleInput = lastCard.querySelector('.f-title');
+          if (titleInput) titleInput.focus();
+        }
+      }
     };
     card.querySelectorAll('.f-area,.f-title,.f-detail,.f-severity,.f-cost').forEach((el) => {
       el.addEventListener('change', save);
