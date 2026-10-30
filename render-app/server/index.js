@@ -31,6 +31,9 @@ app.get('/app', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'app.html')));
 app.get('/spectora-alternative', (req, res) =>
   res.sendFile(path.join(PUBLIC_DIR, 'spectora-alternative.html'))
 );
+app.get('/homegauge-alternative', (req, res) =>
+  res.sendFile(path.join(PUBLIC_DIR, 'homegauge-alternative.html'))
+);
 app.use(
   express.static(PUBLIC_DIR, {
     index: false,
