@@ -356,6 +356,12 @@ h1 { font-family: Archivo, sans-serif; font-size: 28px; font-weight: 800; letter
 .stage-thumbs:empty { display: none; }
 .stage-thumbs .f-photo img { width: 84px; height: 62px; object-fit: cover; border: 1px solid var(--line); border-radius: 8px; display: block; }
 
+/* Download PDF buttons (under the live preview + at the bottom of the editor) */
+.pdf-dl-row { display: flex; align-items: center; gap: 12px; margin-top: 14px; }
+.pdf-dl-row .btn { flex: 1; }
+.pdf-dl-row .pdf-status { color: var(--amber-text); }
+.pdf-dl-bottom { max-width: 560px; margin: 22px auto 6px; }
+
 /* House photo (report cover) picker in the Photos card */
 .cover-block {
   display: flex; gap: 14px; justify-content: space-between; align-items: flex-start;
