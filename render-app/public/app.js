@@ -730,7 +730,7 @@ function renderFindings() {
   const wrap = $('#findingList');
   const findings = state.current.findings;
   if (!findings.length) {
-    wrap.innerHTML = '<p class="muted">No findings yet. Paste field notes above and hit “AI Structure notes”, or add one manually.</p>';
+    wrap.innerHTML = '<p class="muted">No findings yet. Paste field notes above and hit “AI Structure notes”, add one with “+ Add finding”, or add photos only and fill in the finding later.</p>';
     return;
   }
   wrap.innerHTML = findings
@@ -825,13 +825,90 @@ function renderFindings() {
   });
 }
 
+/* --- Findings composer: stage photos here, they attach when the finding is added --- */
+let stagedPhotos = [];
+
+function renderStaged() {
+  const wrap = $('#stageThumbs');
+  wrap.innerHTML = stagedPhotos
+    .map(
+      (s, i) =>
+        `<span class="f-photo"><img src="${s.url}" alt="Staged photo" /><button class="f-photo-del" data-unstage="${i}" title="Remove photo">✕</button></span>`
+    )
+    .join('');
+  wrap.querySelectorAll('[data-unstage]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const [gone] = stagedPhotos.splice(Number(btn.dataset.unstage), 1);
+      if (gone) URL.revokeObjectURL(gone.url);
+      renderStaged();
+    });
+  });
+}
+
+function clearStaged() {
+  stagedPhotos.forEach((s) => URL.revokeObjectURL(s.url));
+  stagedPhotos = [];
+  renderStaged();
+}
+
+$('#stagePhotoInput').addEventListener('change', (e) => {
+  for (const file of e.target.files) {
+    stagedPhotos.push({ file, url: URL.createObjectURL(file) });
+  }
+  e.target.value = '';
+  renderStaged();
+});
+
+async function uploadStagedTo(findingId) {
+  if (!stagedPhotos.length) return;
+  const form = new FormData();
+  for (const s of stagedPhotos) form.append('photos', s.file);
+  form.append('findingId', String(findingId));
+  const res = await fetch(`/api/reports/${state.current.report.id}/photos`, {
+    method: 'POST',
+    credentials: 'same-origin',
+    body: form,
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw new Error((data && data.error) || 'Photo upload failed.');
+  clearStaged();
+}
+
+function findingTitleFromNote(note) {
+  const first = note.split(/[\n.]/)[0].trim();
+  return (first || note).slice(0, 60);
+}
+
 $('#addFindingBtn').addEventListener('click', async () => {
   if (!state.current) return;
-  await api(`/api/reports/${state.current.report.id}/findings`, {
-    method: 'POST',
-    body: JSON.stringify({}),
-  });
-  await refreshCurrent();
+  const errBox = $('#stageError');
+  errBox.classList.add('hidden');
+  const note = $('#notesBox').value.trim();
+  const hadPhotos = stagedPhotos.length > 0;
+  const body = {};
+  if (note) {
+    body.title = findingTitleFromNote(note);
+    body.detail = note;
+  } else if (hadPhotos) {
+    body.title = 'Photo finding — add details';
+  }
+  try {
+    const { finding } = await api(`/api/reports/${state.current.report.id}/findings`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+    if (hadPhotos) await uploadStagedTo(finding.id);
+    $('#notesBox').value = '';
+    $('#structureMsg').textContent = note
+      ? 'Finding added below — adjust the severity and cost, or hit ✨ Polish on the finding.'
+      : hadPhotos
+        ? 'Photo finding added below — fill in its title and details whenever you’re ready.'
+        : '';
+    await refreshCurrent();
+  } catch (err) {
+    errBox.textContent = err.message;
+    errBox.classList.remove('hidden');
+  }
 });
 
 $('#structureBtn').addEventListener('click', async () => {
@@ -839,7 +916,9 @@ $('#structureBtn').addEventListener('click', async () => {
   const notes = $('#notesBox').value.trim();
   const msg = $('#structureMsg');
   if (!notes) {
-    msg.textContent = 'Write some field notes first.';
+    msg.textContent = stagedPhotos.length
+      ? 'No notes to structure — or press “+ Add finding” to add the staged photos as their own finding.'
+      : 'Write some field notes first.';
     return;
   }
   $('#structureBtn').disabled = true;
@@ -850,9 +929,19 @@ $('#structureBtn').addEventListener('click', async () => {
       body: JSON.stringify({ notes }),
     });
     $('#notesBox').value = '';
+    let photoNote = '';
+    if (stagedPhotos.length && findings.length) {
+      const count = stagedPhotos.length;
+      try {
+        await uploadStagedTo(findings[0].id);
+        photoNote = ` ${count} photo${count === 1 ? '' : 's'} attached to the first finding.`;
+      } catch (err) {
+        photoNote = ' Photo upload failed — your photos are still staged above.';
+      }
+    }
     msg.textContent = `Added ${findings.length} finding${findings.length === 1 ? '' : 's'}${
       aiUsed ? ' using AI' : ' using the built-in structurer (no AI key configured)'
-    }. Review and adjust severity and costs below.`;
+    }. Review and adjust severity and costs below.${photoNote}`;
     await refreshCurrent();
   } catch (err) {
     msg.textContent = err.message;
