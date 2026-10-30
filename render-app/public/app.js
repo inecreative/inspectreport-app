@@ -1045,7 +1045,8 @@ function renderPreview() {
 /* --- PDF (gated: export is part of the $49/mo plan) --- */
 
 /**
- * Header PDF button states:
+ * PDF button states (two buttons: under the live preview, and at the
+ * bottom of the editor — both always show the same state):
  *  - no report open            -> disabled, default label
  *  - report open, has access   -> enabled, normal download (subscription,
  *    comp grant, or the free 3-day trial every new account starts with)
@@ -1054,21 +1055,22 @@ function renderPreview() {
  * Reports, editing and the live preview are always free.
  */
 function updatePdfButton() {
-  const btn = $('#pdfBtn');
-  if (!state.current) {
-    btn.disabled = true;
-    btn.classList.remove('btn-locked');
-    btn.textContent = '⬇ Download PDF';
-    return;
-  }
-  btn.disabled = false;
-  if (hasPdfAccess()) {
-    btn.classList.remove('btn-locked');
-    btn.textContent = '⬇ Download PDF';
-  } else {
-    btn.classList.add('btn-locked');
-    btn.textContent = '🔒 PDF — Pro';
-  }
+  document.querySelectorAll('.pdf-dl-btn').forEach((btn) => {
+    if (!state.current) {
+      btn.disabled = true;
+      btn.classList.remove('btn-locked');
+      btn.textContent = '⬇ Download PDF';
+      return;
+    }
+    btn.disabled = false;
+    if (hasPdfAccess()) {
+      btn.classList.remove('btn-locked');
+      btn.textContent = '⬇ Download PDF';
+    } else {
+      btn.classList.add('btn-locked');
+      btn.textContent = '🔒 PDF — Pro';
+    }
+  });
 }
 
 function openUpgrade() {
@@ -1092,17 +1094,21 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') closeUpgrade();
 });
 
-$('#pdfBtn').addEventListener('click', async () => {
-  if (!state.current) return;
-  // Refresh billing right before deciding, so a just-granted or
-  // just-paid subscription takes effect without a page reload.
-  await loadBilling();
-  if (!hasPdfAccess()) {
-    openUpgrade();
-    return;
-  }
-  await window.downloadReportPdf(state.current, (msg) => {
-    $('#pdfStatus').textContent = msg;
+document.querySelectorAll('.pdf-dl-btn').forEach((btn) => {
+  btn.addEventListener('click', async () => {
+    if (!state.current) return;
+    // Refresh billing right before deciding, so a just-granted or
+    // just-paid subscription takes effect without a page reload.
+    await loadBilling();
+    if (!hasPdfAccess()) {
+      openUpgrade();
+      return;
+    }
+    const row = btn.closest('.pdf-dl-row');
+    const status = row ? row.querySelector('.pdf-status') : null;
+    await window.downloadReportPdf(state.current, (msg) => {
+      if (status) status.textContent = msg;
+    });
   });
 });
 
