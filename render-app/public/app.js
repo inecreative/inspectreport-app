@@ -752,7 +752,7 @@ function renderFindings() {
             </select></label>
           <label class="field-inline"><span>Est. cost $</span>
             <input class="f-cost" type="number" min="0" step="1" value="${Number(f.cost || 0)}" /></label>
-          <button class="btn btn-navy btn-sm" data-polish="${f.id}">✨ Polish</button>
+          <button class="btn btn-amber btn-sm" data-polish="${f.id}">✨ Polish</button>
           <button class="btn btn-danger-ghost btn-sm" data-del-finding="${f.id}">Delete</button>
         </div>
         <div class="finding-photos">
