@@ -350,6 +350,12 @@ h1 { font-family: Archivo, sans-serif; font-size: 28px; font-weight: 800; letter
 }
 .f-photo-add:hover { border-color: var(--amber); color: var(--amber-text); }
 
+/* Staged photos in the Findings composer (attach on add) */
+.stage-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 2px 0 10px; }
+.stage-thumbs { display: flex; gap: 8px; flex-wrap: wrap; }
+.stage-thumbs:empty { display: none; }
+.stage-thumbs .f-photo img { width: 84px; height: 62px; object-fit: cover; border: 1px solid var(--line); border-radius: 8px; display: block; }
+
 /* House photo (report cover) picker in the Photos card */
 .cover-block {
   display: flex; gap: 14px; justify-content: space-between; align-items: flex-start;
