@@ -730,7 +730,7 @@ function renderFindings() {
   const wrap = $('#findingList');
   const findings = state.current.findings;
   if (!findings.length) {
-    wrap.innerHTML = '<p class="muted">No findings yet. Paste field notes above and hit “AI Structure notes”, add one with “+ Add finding”, or add photos only and fill in the finding later.</p>';
+    wrap.innerHTML = '<p class="muted">No findings yet. Paste field notes above and hit “AI Structure notes”, or add one manually — photos can go in with your notes, before any finding exists.</p>';
     return;
   }
   wrap.innerHTML = findings
@@ -874,36 +874,22 @@ async function uploadStagedTo(findingId) {
   clearStaged();
 }
 
-function findingTitleFromNote(note) {
-  const first = note.split(/[\n.]/)[0].trim();
-  return (first || note).slice(0, 60);
-}
-
 $('#addFindingBtn').addEventListener('click', async () => {
   if (!state.current) return;
   const errBox = $('#stageError');
   errBox.classList.add('hidden');
-  const note = $('#notesBox').value.trim();
-  const hadPhotos = stagedPhotos.length > 0;
-  const body = {};
-  if (note) {
-    body.title = findingTitleFromNote(note);
-    body.detail = note;
-  } else if (hadPhotos) {
-    body.title = 'Photo finding — add details';
-  }
+  const photoCount = stagedPhotos.length;
   try {
+    // Manual add stays a blank finding — the notes box is never consumed here.
+    // Photos staged with the notes attach to the new finding.
     const { finding } = await api(`/api/reports/${state.current.report.id}/findings`, {
       method: 'POST',
-      body: JSON.stringify(body),
+      body: JSON.stringify({}),
     });
-    if (hadPhotos) await uploadStagedTo(finding.id);
-    $('#notesBox').value = '';
-    $('#structureMsg').textContent = note
-      ? 'Finding added below — adjust the severity and cost, or hit ✨ Polish on the finding.'
-      : hadPhotos
-        ? 'Photo finding added below — fill in its title and details whenever you’re ready.'
-        : '';
+    if (photoCount) await uploadStagedTo(finding.id);
+    $('#structureMsg').textContent = photoCount
+      ? `Finding added below with your ${photoCount} photo${photoCount === 1 ? '' : 's'} attached — fill in its details.`
+      : '';
     await refreshCurrent();
   } catch (err) {
     errBox.textContent = err.message;
@@ -917,7 +903,7 @@ $('#structureBtn').addEventListener('click', async () => {
   const msg = $('#structureMsg');
   if (!notes) {
     msg.textContent = stagedPhotos.length
-      ? 'No notes to structure — or press “+ Add finding” to add the staged photos as their own finding.'
+      ? 'No notes to structure — or press “+ Add finding manually” to create a finding for the staged photos.'
       : 'Write some field notes first.';
     return;
   }
