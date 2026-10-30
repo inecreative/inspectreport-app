@@ -159,9 +159,18 @@
           <span>Field notes — write it rough, AI structures it</span>
           <textarea id="notesBox" rows="4" placeholder="e.g. kitchen sink leak active, cabinet water damage. roof shingles cracked north side. furnace filter dirty."></textarea>
         </label>
+        <div class="stage-row">
+          <label class="btn btn-navy btn-file btn-sm">
+            📷 Add photos
+            <input type="file" id="stagePhotoInput" accept="image/jpeg,image/png,image/webp,image/gif" multiple hidden />
+          </label>
+          <span class="muted small">Photos attach to the finding you add next. No notes? Add photos only — fill in the finding later.</span>
+        </div>
+        <div id="stageThumbs" class="stage-thumbs"></div>
+        <p id="stageError" class="error hidden"></p>
         <div class="row-gap">
           <button id="structureBtn" class="btn btn-amber">✨ AI Structure notes</button>
-          <button id="addFindingBtn" class="btn btn-navy">+ Add finding manually</button>
+          <button id="addFindingBtn" class="btn btn-navy">+ Add finding</button>
         </div>
         <p id="structureMsg" class="muted small"></p>
         <div id="findingList"></div>
