@@ -23,8 +23,6 @@
   <div class="header-inner">
     <div class="brand"><div class="brand-mark">🏠</div><div><b>InspectReport AI</b><span>For inspectors &amp; contractors</span></div></div>
     <div class="header-actions">
-      <span id="pdfStatus" class="pdf-status" aria-live="polite"></span>
-      <button id="pdfBtn" class="btn btn-primary" disabled>⬇ Download PDF</button>
       <span id="userArea" class="user-area hidden">
         <button id="profileBtn" class="btn btn-ghost profile-btn" title="User profile" aria-label="User profile">👤</button>
         <span id="userEmail" class="user-email"></span>
@@ -190,8 +188,17 @@
       <div class="preview-wrap">
         <h2 class="preview-title">Live report preview</h2>
         <div id="preview" class="preview"></div>
+        <div class="pdf-dl-row">
+          <button class="btn btn-primary btn-big pdf-dl-btn" disabled>⬇ Download PDF</button>
+          <span class="pdf-status" aria-live="polite"></span>
+        </div>
       </div>
       </div><!-- /.editor-grid -->
+
+      <div class="pdf-dl-row pdf-dl-bottom">
+        <button class="btn btn-primary btn-big pdf-dl-btn" disabled>⬇ Download PDF</button>
+        <span class="pdf-status" aria-live="polite"></span>
+      </div>
     </div>
 
     <!-- User profile -->
