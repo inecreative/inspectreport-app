@@ -25,20 +25,71 @@ function money(n) {
   return `$${Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
 }
 
+/* --- Autosave status -----------------------------------------------
+   There is no Save button anywhere in the editor — every field saves on
+   change. The indicator in the editor header reflects REAL request
+   state: it flips to "Saving…" while any mutating request is in flight,
+   to "✓ Saved <time>" when the last one succeeds, and to a warning when
+   one fails. The photo uploads (raw fetch, below) report through the
+   same counters. */
+let savePending = 0;
+
+function paintSaveStatus(kind, text) {
+  const el = $('#saveStatus');
+  if (!el) return;
+  el.textContent = text;
+  el.classList.toggle('is-saving', kind === 'saving');
+  el.classList.toggle('is-saved', kind === 'saved');
+  el.classList.toggle('is-error', kind === 'error');
+}
+
+function noteSaveStart() {
+  savePending += 1;
+  paintSaveStatus('saving', 'Saving…');
+}
+
+function noteSaveDone() {
+  savePending = Math.max(0, savePending - 1);
+  if (savePending > 0) return;
+  const t = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  paintSaveStatus('saved', `✓ All changes saved · ${t}`);
+}
+
+function noteSaveError() {
+  savePending = Math.max(0, savePending - 1);
+  if (savePending > 0) return;
+  paintSaveStatus('error', '⚠ Could not save — check your connection');
+}
+
+function resetSaveStatus() {
+  savePending = 0;
+  paintSaveStatus('', 'All changes save automatically');
+}
+
 async function api(path, options = {}) {
-  const res = await fetch(path, {
-    credentials: 'same-origin',
-    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
-    ...options,
-  });
-  let data = null;
+  const mutating = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(
+    String(options.method || 'GET').toUpperCase()
+  );
+  if (mutating) noteSaveStart();
   try {
-    data = await res.json();
-  } catch (_) {
-    /* no body */
+    const res = await fetch(path, {
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+      ...options,
+    });
+    let data = null;
+    try {
+      data = await res.json();
+    } catch (_) {
+      /* no body */
+    }
+    if (!res.ok) throw new Error((data && data.error) || `Request failed (${res.status})`);
+    if (mutating) noteSaveDone();
+    return data;
+  } catch (err) {
+    if (mutating) noteSaveError();
+    throw err;
   }
-  if (!res.ok) throw new Error((data && data.error) || `Request failed (${res.status})`);
-  return data;
 }
 
 /* ---------------------------------------------------------------- */
@@ -161,8 +212,13 @@ function hasPdfAccess() {
   return Boolean(b.subscribed || b.inTrial);
 }
 
+/* One-shot message shown at the top of the billing card after a
+   subscribe/cancel action re-renders it. */
+let billingFlash = '';
+
 function billingHtml() {
   const b = state.billing || { priceMonthly: 49, paymentLinkUrl: null };
+  const flash = billingFlash ? `<p class="small"><b>${esc(billingFlash)}</b></p>` : '';
   if (b.subscribed) {
     const viaNote =
       b.subscribedVia === 'comp'
@@ -170,15 +226,29 @@ function billingHtml() {
         : b.subscribedVia === 'stripe'
           ? 'Paid via Stripe. All features unlocked, including PDF export.'
           : 'Access granted. All features unlocked, including PDF export.';
+    const cancelBlock =
+      b.subscribedVia === 'comp'
+        ? ''
+        : b.cancelAtPeriodEnd
+          ? `<p class="muted small">Cancellation scheduled — your plan stays active until the end of the current billing period, then PDF export turns off.</p>
+             <div class="row-gap"><button class="btn btn-amber btn-sm" id="undoCancelBtn">Keep my subscription</button></div>
+             <p class="small billing-status" aria-live="polite"></p>`
+          : b.cancelRequestedAt
+            ? `<p class="muted small">Cancellation requested on ${esc(String(b.cancelRequestedAt).slice(0, 10))} — we're processing it, and your access stays active until it completes.</p>
+               <div class="row-gap"><button class="btn btn-amber btn-sm" id="undoCancelBtn">Keep my subscription</button></div>
+               <p class="small billing-status" aria-live="polite"></p>`
+            : `<div class="row-gap"><button class="btn btn-ghost btn-sm" id="cancelSubBtn">Cancel subscription</button></div>
+               <p class="small billing-status" aria-live="polite"></p>`;
     return `
     <h2>Billing</h2>
+    ${flash}
     <div class="billing-inner">
       <div>
         <div class="billing-price">Plan: Active <small>✓</small></div>
         <p class="muted">${viaNote}</p>
       </div>
       <div><span class="pill pill-good">Subscribed</span></div>
-    </div>${adminBoxHtml(b)}`;
+    </div>${cancelBlock}${adminBoxHtml(b)}`;
   }
   const button = b.paymentLinkUrl
     ? `<a class="btn btn-amber btn-big" href="${esc(b.paymentLinkUrl)}" target="_blank" rel="noopener">Subscribe — $${b.priceMonthly}/mo</a>`
@@ -189,6 +259,7 @@ function billingHtml() {
     : '';
   return `
     <h2>Billing</h2>
+    ${flash}
     <div class="billing-inner">
       <div>
         <div class="billing-price">$${b.priceMonthly}<small>/mo flat per account</small></div>
@@ -236,7 +307,14 @@ async function loadAdminStats(card) {
         <div class="stat"><div class="stat-num">${s.inTrial}</div><div class="stat-label">In free trial</div></div>
         <div class="stat"><div class="stat-num">${s.totalReports}</div><div class="stat-label">Reports created</div></div>
       </div>
-      ${recent ? `<p class="muted small">Newest signups: ${recent}</p>` : ''}`;
+      ${recent ? `<p class="muted small">Newest signups: ${recent}</p>` : ''}
+      ${
+        s.cancelRequests && s.cancelRequests.length
+          ? `<p class="muted small"><b>Cancellation requests to process in Stripe:</b> ${s.cancelRequests
+              .map((r) => `${esc(r.email)} (${esc(String(r.requestedAt).slice(0, 10))})`)
+              .join(' · ')}</p>`
+          : ''
+      }`;
   } catch (err) {
     body.innerHTML = '<p class="muted small">Stats unavailable right now.</p>';
   }
@@ -267,6 +345,42 @@ async function adminAccess(card, grant) {
   }
 }
 
+async function cancelSubscription(card) {
+  const status = card.querySelector('.billing-status');
+  if (
+    !window.confirm(
+      'Cancel your subscription? Paid plans stay active until the end of the current billing period; after that, PDF export turns off (reports and the preview stay free).'
+    )
+  ) {
+    return;
+  }
+  if (status) status.textContent = 'Processing…';
+  try {
+    const out = await api('/api/billing/cancel', { method: 'POST', body: '{}' });
+    billingFlash =
+      out.mode === 'period_end'
+        ? '✓ Cancellation scheduled with Stripe — access continues until the end of this billing period.'
+        : out.mode === 'requested'
+          ? '✓ Cancellation requested — we will process it shortly and email you when it is done.'
+          : '✓ Subscription cancelled.';
+    await loadBilling();
+  } catch (err) {
+    if (status) status.textContent = err.message;
+  }
+}
+
+async function undoCancellation(card) {
+  const status = card.querySelector('.billing-status');
+  if (status) status.textContent = 'Processing…';
+  try {
+    await api('/api/billing/cancel/undo', { method: 'POST', body: '{}' });
+    billingFlash = '✓ Cancellation undone — your subscription continues as before.';
+    await loadBilling();
+  } catch (err) {
+    if (status) status.textContent = err.message;
+  }
+}
+
 function renderBilling() {
   const b = state.billing || {};
   for (const id of ['#billingCardProfile']) {
@@ -277,8 +391,13 @@ function renderBilling() {
     const revokeBtn = el.querySelector('.admin-revoke');
     if (grantBtn) grantBtn.addEventListener('click', () => adminAccess(el, true));
     if (revokeBtn) revokeBtn.addEventListener('click', () => adminAccess(el, false));
+    const cancelBtn = el.querySelector('#cancelSubBtn');
+    if (cancelBtn) cancelBtn.addEventListener('click', () => cancelSubscription(el));
+    const undoBtn = el.querySelector('#undoCancelBtn');
+    if (undoBtn) undoBtn.addEventListener('click', () => undoCancellation(el));
     if (b.isAdmin) loadAdminStats(el);
   }
+  billingFlash = '';
 }
 
 /* ---------------------------------------------------------------- */
@@ -341,6 +460,33 @@ $('#profileForm').addEventListener('submit', async (e) => {
   }
 });
 
+$('#passwordForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const msg = $('#passwordMsg');
+  const current = $('#pw_current').value;
+  const next = $('#pw_new').value;
+  const confirm = $('#pw_confirm').value;
+  if (next.length < 8) {
+    msg.textContent = 'New password must be at least 8 characters.';
+    return;
+  }
+  if (next !== confirm) {
+    msg.textContent = 'New passwords do not match.';
+    return;
+  }
+  msg.textContent = 'Updating…';
+  try {
+    await api('/api/profile/password', {
+      method: 'PUT',
+      body: JSON.stringify({ currentPassword: current, newPassword: next }),
+    });
+    e.target.reset();
+    msg.textContent = '✓ Password changed. Use the new password next time you sign in.';
+  } catch (err) {
+    msg.textContent = err.message;
+  }
+});
+
 /* ---------------------------------------------------------------- */
 /* Reports list                                                      */
 /* ---------------------------------------------------------------- */
@@ -398,6 +544,9 @@ function showEditor() {
   $('#editorView').classList.remove('hidden');
   updatePdfButton();
   const r = state.current.report;
+  resetSaveStatus();
+  $('#f_doc_type').value = r.doc_type === 'job' ? 'job' : 'inspection';
+  updateDocTypeLabels();
   $('#f_address').value = r.address || '';
   $('#f_client_name').value = r.client_name || '';
   $('#f_client_email').value = r.client_email || '';
@@ -445,6 +594,29 @@ function renderEditor() {
   renderFindings();
   renderPreview();
 }
+
+/* --- Document type (per report): Inspection Report vs Job Report ---
+   Job Report is the trades-facing document: same layout, but the badge,
+   the preparer label and the signature line drop the inspector wording.
+   The preview and the PDF read the same doc_type, so they never drift. */
+function updateDocTypeLabels() {
+  const isJob = $('#f_doc_type').value === 'job';
+  $('#f_inspector_name_label').textContent = isJob ? 'Prepared by' : 'Inspector name';
+  $('#f_inspection_date_label').textContent = isJob ? 'Job date' : 'Inspection date';
+  $('#f_inspector_name').placeholder = isJob
+    ? 'Alex Carter, Carter Plumbing Co.'
+    : 'Alex Carter, Licensed Inspector';
+}
+
+$('#f_doc_type').addEventListener('change', async () => {
+  updateDocTypeLabels();
+  if (!state.current) return;
+  state.current = await api(`/api/reports/${state.current.report.id}`, {
+    method: 'PUT',
+    body: JSON.stringify({ doc_type: $('#f_doc_type').value }),
+  });
+  renderPreview();
+});
 
 /* --- Property & client main fields: save on change --- */
 for (const key of ['address', 'client_name', 'client_email', 'client_phone', 'inspector_name', 'inspection_date']) {
@@ -664,6 +836,7 @@ $('#coverInput').addEventListener('change', async (e) => {
   const errBox = $('#coverError');
   errBox.classList.add('hidden');
   try {
+    noteSaveStart();
     const form = new FormData();
     form.append('photos', file);
     const res = await fetch(`/api/reports/${state.current.report.id}/photos`, {
@@ -680,7 +853,9 @@ $('#coverInput').addEventListener('change', async (e) => {
       body: JSON.stringify({ cover_photo_id: photo.id }),
     });
     await refreshCurrent();
+    noteSaveDone();
   } catch (err) {
+    noteSaveError();
     errBox.textContent = err.message;
     errBox.classList.remove('hidden');
   } finally {
@@ -707,6 +882,7 @@ $('#photoInput').addEventListener('change', async (e) => {
   const findingId = $('#photoFindingSelect').value;
   if (findingId) form.append('findingId', findingId);
   try {
+    noteSaveStart();
     const res = await fetch(`/api/reports/${state.current.report.id}/photos`, {
       method: 'POST',
       credentials: 'same-origin',
@@ -715,7 +891,9 @@ $('#photoInput').addEventListener('change', async (e) => {
     const data = await res.json().catch(() => null);
     if (!res.ok) throw new Error((data && data.error) || 'Upload failed.');
     await refreshCurrent();
+    noteSaveDone();
   } catch (err) {
+    noteSaveError();
     errBox.textContent = err.message;
     errBox.classList.remove('hidden');
   } finally {
@@ -828,6 +1006,7 @@ function renderFindings() {
       for (const file of files) form.append('photos', file);
       form.append('findingId', input.dataset.findingPhotoInput);
       try {
+        noteSaveStart();
         const res = await fetch(`/api/reports/${state.current.report.id}/photos`, {
           method: 'POST',
           credentials: 'same-origin',
@@ -835,7 +1014,9 @@ function renderFindings() {
         });
         if (!res.ok) throw new Error('Upload failed.');
         await refreshCurrent();
+        noteSaveDone();
       } catch (err) {
+        noteSaveError();
         window.alert(err.message);
       } finally {
         e.target.value = '';
@@ -889,13 +1070,18 @@ async function uploadStagedTo(findingId) {
   const form = new FormData();
   for (const s of stagedPhotos) form.append('photos', s.file);
   form.append('findingId', String(findingId));
+  noteSaveStart();
   const res = await fetch(`/api/reports/${state.current.report.id}/photos`, {
     method: 'POST',
     credentials: 'same-origin',
     body: form,
   });
   const data = await res.json().catch(() => null);
-  if (!res.ok) throw new Error((data && data.error) || 'Photo upload failed.');
+  if (!res.ok) {
+    noteSaveError();
+    throw new Error((data && data.error) || 'Photo upload failed.');
+  }
+  noteSaveDone();
   clearStaged();
 }
 
@@ -987,10 +1173,11 @@ $('#summarizeBtn').addEventListener('click', async () => {
 function renderPreview() {
   const { report, customFields, findings } = state.current;
   const s = reportStats();
+  const isJob = report.doc_type === 'job';
   const rows = [
     ['Client', report.client_name || '—'],
     ['Date', report.inspection_date ? String(report.inspection_date).slice(0, 10) : '—'],
-    ['Inspector', report.inspector_name || '—'],
+    [isJob ? 'Prepared by' : 'Inspector', report.inspector_name || '—'],
     ['Client email', report.client_email || '—'],
     ['Client phone', report.client_phone || '—'],
     ...customFields.map((f) => [f.name || 'Field', f.value || '—']),
@@ -999,9 +1186,9 @@ function renderPreview() {
     <article class="report">
       ${report.cover_url ? `<img class="report-cover" src="${esc(report.cover_url)}" alt="Property photo" />` : ''}
       <div class="report-head">
-        <span class="badge">Home Inspection Report</span>
+        <span class="badge">${isJob ? 'Job Report' : 'Home Inspection Report'}</span>
         <h1>${esc(report.address || 'Add a property address to start your report')}</h1>
-        <p>Professional inspection report · Generated with InspectReport AI</p>
+        <p>Professional ${isJob ? 'job' : 'inspection'} report · Generated with InspectReport AI</p>
       </div>
       <div class="report-body">
         <dl class="meta">
@@ -1035,9 +1222,9 @@ function renderPreview() {
         }
         <div class="total-row">
           <span>Total estimated repairs: <b>${money(s.total)}</b></span>
-          <span>Inspector signature: ___________________</span>
+          <span>${isJob ? 'Signature' : 'Inspector signature'}: ___________________</span>
         </div>
-        <p class="disclaimer">This report summarizes visible conditions at the time of inspection. It is not a warranty or guarantee. Costs are ballpark estimates for planning only — obtain licensed contractor quotes for exact pricing. Photos are inspector-provided.</p>
+        <p class="disclaimer">${isJob ? 'This report summarizes the work documented and the visible conditions at the job site. It is not a warranty or guarantee. Costs are ballpark estimates for planning only — obtain licensed contractor quotes for exact pricing. Photos are provided by the preparer.' : 'This report summarizes visible conditions at the time of inspection. It is not a warranty or guarantee. Costs are ballpark estimates for planning only — obtain licensed contractor quotes for exact pricing. Photos are inspector-provided.'}</p>
       </div>
     </article>`;
 }
