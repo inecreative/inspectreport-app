@@ -34,6 +34,17 @@ app.get('/spectora-alternative', (req, res) =>
 app.get('/homegauge-alternative', (req, res) =>
   res.sendFile(path.join(PUBLIC_DIR, 'homegauge-alternative.html'))
 );
+// Blog: static HTML under public/blog/, one file per post. The slug
+// pattern is deliberately generic so new posts are just new files —
+// no route change needed when a post is published.
+app.get('/blog', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'blog', 'index.html')));
+app.get('/blog/:slug', (req, res, next) => {
+  if (!/^[a-z0-9][a-z0-9-]*$/.test(req.params.slug)) return next();
+  const file = path.join(PUBLIC_DIR, 'blog', `${req.params.slug}.html`);
+  return res.sendFile(file, (err) => {
+    if (err) next();
+  });
+});
 app.use(
   express.static(PUBLIC_DIR, {
     index: false,
