@@ -116,6 +116,7 @@ async function initAuth() {
     state.user = user;
     showApp();
     await loadBilling();
+    await fetchProfile();
     await loadReports();
   } catch (_) {
     showAuth();
@@ -158,6 +159,7 @@ $('#authForm').addEventListener('submit', async (e) => {
     state.user = user;
     showApp();
     await loadBilling();
+    await fetchProfile();
     await loadReports();
   } catch (err) {
     errBox.textContent = err.message;
@@ -404,17 +406,22 @@ function renderBilling() {
 /* User profile (details form + the billing plan live on this page)  */
 /* ---------------------------------------------------------------- */
 
-async function loadProfile() {
+async function fetchProfile() {
   try {
     const { profile } = await api('/api/profile');
     state.profile = profile;
   } catch (_) {
-    state.profile = null;
+    /* profile is optional everywhere it is used */
   }
+}
+
+async function loadProfile() {
+  await fetchProfile();
   const p = state.profile || {};
   $('#p_full_name').value = p.fullName || '';
   $('#p_company_name').value = p.companyName || '';
   $('#p_phone').value = p.phone || '';
+  $('#p_company_address').value = p.companyAddress || '';
   $('#p_email').value = p.email || (state.user && state.user.email) || '';
   $('#profileMsg').textContent = '';
 }
@@ -451,6 +458,7 @@ $('#profileForm').addEventListener('submit', async (e) => {
         fullName: $('#p_full_name').value,
         companyName: $('#p_company_name').value,
         phone: $('#p_phone').value,
+        companyAddress: $('#p_company_address').value,
       }),
     });
     state.profile = profile;
@@ -1169,6 +1177,19 @@ $('#summarizeBtn').addEventListener('click', async () => {
   $('#summaryBox').value = summary;
 });
 
+/* Company footer at the bottom of the report (replaces the old
+   disclaimer): the preparer's company name, address, phone and email
+   from their User Profile. Renders nothing when all are empty. */
+function companyBlockHtml(report) {
+  const prof = state.profile || {};
+  const coName = prof.companyName || report.inspector_name || prof.fullName || '';
+  const coLine = [prof.companyAddress, prof.phone, prof.email]
+    .filter((v) => v && String(v).trim())
+    .join(' · ');
+  if (!coName && !coLine) return '';
+  return `<div class="report-company">${coName ? `<p class="rc-name">${esc(coName)}</p>` : ''}${coLine ? `<p class="rc-line">${esc(coLine)}</p>` : ''}</div>`;
+}
+
 /* --- Preview (mirrors the approved report document look) --- */
 function renderPreview() {
   const { report, customFields, findings } = state.current;
@@ -1223,7 +1244,7 @@ function renderPreview() {
           <span>Total estimated repairs: <b>${money(s.total)}</b></span>
           <span>${isJob ? 'Signature' : 'Inspector signature'}: ___________________</span>
         </div>
-        <p class="disclaimer">${isJob ? 'This report summarizes the work documented and the visible conditions at the job site. It is not a warranty or guarantee. Costs are ballpark estimates for planning only — obtain licensed contractor quotes for exact pricing. Photos are provided by the preparer.' : 'This report summarizes visible conditions at the time of inspection. It is not a warranty or guarantee. Costs are ballpark estimates for planning only — obtain licensed contractor quotes for exact pricing. Photos are inspector-provided.'}</p>
+        ${companyBlockHtml(report)}
       </div>
     </article>`;
 }
@@ -1292,7 +1313,7 @@ document.querySelectorAll('.pdf-dl-btn').forEach((btn) => {
     }
     const row = btn.closest('.pdf-dl-row');
     const status = row ? row.querySelector('.pdf-status') : null;
-    await window.downloadReportPdf(state.current, (msg) => {
+    await window.downloadReportPdf({ ...state.current, profile: state.profile }, (msg) => {
       if (status) status.textContent = msg;
     });
   });
