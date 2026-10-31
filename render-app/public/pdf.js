@@ -173,7 +173,7 @@ async function downloadReportPdf(data, setStatus) {
       report.address || 'Add a property address to start your report',
       bodyW
     );
-    const headH = 13 + 17 + 9 + addrLines.length * 23 + 7 + 13 + 15;
+    const headH = 13 + 17 + 9 + addrLines.length * 23 + 15;
     fillColor(C.navy);
     if (hasCover) {
       doc.rect(margin, y, contentW, headH, 'F');
@@ -202,15 +202,6 @@ async function downloadReportPdf(data, setStatus) {
       doc.text(line, bodyX, ty);
       ty += 23;
     }
-    // Subline
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(10.5);
-    setColor(C.headSub);
-    doc.text(
-      `Professional ${isJob ? 'job' : 'inspection'} report · Generated with InspectReport AI`,
-      bodyX,
-      ty + 2
-    );
     y += headH + 20;
 
     /* ---------- Meta grid (2 columns, like the preview) ---------- */
