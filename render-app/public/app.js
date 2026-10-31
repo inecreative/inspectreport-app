@@ -1188,7 +1188,6 @@ function renderPreview() {
       <div class="report-head">
         <span class="badge">${isJob ? 'Job Report' : 'Home Inspection Report'}</span>
         <h1>${esc(report.address || 'Add a property address to start your report')}</h1>
-        <p>Professional ${isJob ? 'job' : 'inspection'} report · Generated with InspectReport AI</p>
       </div>
       <div class="report-body">
         <dl class="meta">
