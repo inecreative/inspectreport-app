@@ -41,13 +41,14 @@ function pdfMoney(n) {
   return `$${Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
 }
 
-function pdfFilename(address) {
-  const base = String(address || 'inspection-report')
+function pdfFilename(address, isJob) {
+  const kind = isJob ? 'job-report' : 'inspection-report';
+  const base = String(address || kind)
     .replace(/[^\w\s-]/g, '')
     .trim()
     .replace(/\s+/g, '-')
     .slice(0, 60);
-  return `${base || 'inspection-report'}-inspection-report.pdf`;
+  return `${base || kind}-${kind}.pdf`;
 }
 
 async function imageToDataUrl(url) {
@@ -123,6 +124,7 @@ async function downloadReportPdf(data, setStatus) {
     return;
   }
   const { report, customFields, findings } = data;
+  const isJob = report.doc_type === 'job';
   setStatus('Building PDF…');
   try {
     const { jsPDF } = window.jspdf;
@@ -182,7 +184,7 @@ async function downloadReportPdf(data, setStatus) {
     // per-character spacing set via setCharSpace, so add it manually —
     // otherwise the badge box comes out too narrow and the end of the
     // text spills off the amber onto the navy.
-    const badgeText = 'HOME INSPECTION REPORT';
+    const badgeText = isJob ? 'JOB REPORT' : 'HOME INSPECTION REPORT';
     const badgeCharSpace = 0.5;
     doc.setFontSize(8.5);
     doc.setCharSpace(badgeCharSpace);
@@ -204,14 +206,18 @@ async function downloadReportPdf(data, setStatus) {
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(10.5);
     setColor(C.headSub);
-    doc.text('Professional inspection report · Generated with InspectReport AI', bodyX, ty + 2);
+    doc.text(
+      `Professional ${isJob ? 'job' : 'inspection'} report · Generated with InspectReport AI`,
+      bodyX,
+      ty + 2
+    );
     y += headH + 20;
 
     /* ---------- Meta grid (2 columns, like the preview) ---------- */
     const rows = [
       ['Client', report.client_name || '—'],
       ['Date', report.inspection_date ? String(report.inspection_date).slice(0, 10) : '—'],
-      ['Inspector', report.inspector_name || '—'],
+      [isJob ? 'Prepared by' : 'Inspector', report.inspector_name || '—'],
       ['Client email', report.client_email || '—'],
       ['Client phone', report.client_phone || '—'],
       ...customFields.map((f) => [f.name || 'Field', f.value || '—']),
@@ -421,22 +427,23 @@ async function downloadReportPdf(data, setStatus) {
     doc.text(pdfMoney(total), bodyX + labelW, y);
     doc.setFont('helvetica', 'normal');
     setColor(C.metaLabel);
-    const sigText = 'Inspector signature: ___________________';
+    const sigText = `${isJob ? 'Signature' : 'Inspector signature'}: ___________________`;
     doc.text(sigText, bodyX + bodyW - doc.getTextWidth(sigText), y);
     y += 12;
 
     /* ---------- Disclaimer ---------- */
     doc.setFontSize(8.3);
     setColor(C.disclaimer);
-    const disclaimer =
-      'This report summarizes visible conditions at the time of inspection. It is not a warranty or guarantee. Costs are ballpark estimates for planning only — obtain licensed contractor quotes for exact pricing. Photos are inspector-provided.';
+    const disclaimer = isJob
+      ? 'This report summarizes the work documented and the visible conditions at the job site. It is not a warranty or guarantee. Costs are ballpark estimates for planning only — obtain licensed contractor quotes for exact pricing. Photos are provided by the preparer.'
+      : 'This report summarizes visible conditions at the time of inspection. It is not a warranty or guarantee. Costs are ballpark estimates for planning only — obtain licensed contractor quotes for exact pricing. Photos are inspector-provided.';
     for (const line of doc.splitTextToSize(disclaimer, bodyW)) {
       ensureSpace(11.5);
       doc.text(line, bodyX, y + 8.3);
       y += 11.5;
     }
 
-    doc.save(pdfFilename(report.address));
+    doc.save(pdfFilename(report.address, isJob));
     setStatus('✓ PDF downloaded');
     setTimeout(() => setStatus(''), 5000);
   } catch (err) {
