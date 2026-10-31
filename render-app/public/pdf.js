@@ -13,7 +13,7 @@
  * title, the two-column Client/Date/Inspector meta grid, the cream
  * executive-summary box, findings with inline severity + cost pills,
  * thumbnail photo rows, the total row with signature line, and the
- * disclaimer. Keep this file in sync with the preview markup/styles —
+ * company footer. Keep this file in sync with the preview markup/styles —
  * the founder's rule is that the download must look like the preview.
  */
 
@@ -123,7 +123,7 @@ async function downloadReportPdf(data, setStatus) {
     setStatus('PDF library failed to load — check your connection and try again.');
     return;
   }
-  const { report, customFields, findings } = data;
+  const { report, customFields, findings, profile } = data;
   const isJob = report.doc_type === 'job';
   setStatus('Building PDF…');
   try {
@@ -422,16 +422,33 @@ async function downloadReportPdf(data, setStatus) {
     doc.text(sigText, bodyX + bodyW - doc.getTextWidth(sigText), y);
     y += 12;
 
-    /* ---------- Disclaimer ---------- */
-    doc.setFontSize(8.3);
-    setColor(C.disclaimer);
-    const disclaimer = isJob
-      ? 'This report summarizes the work documented and the visible conditions at the job site. It is not a warranty or guarantee. Costs are ballpark estimates for planning only — obtain licensed contractor quotes for exact pricing. Photos are provided by the preparer.'
-      : 'This report summarizes visible conditions at the time of inspection. It is not a warranty or guarantee. Costs are ballpark estimates for planning only — obtain licensed contractor quotes for exact pricing. Photos are inspector-provided.';
-    for (const line of doc.splitTextToSize(disclaimer, bodyW)) {
-      ensureSpace(11.5);
-      doc.text(line, bodyX, y + 8.3);
-      y += 11.5;
+    /* ---------- Company footer (replaces the old disclaimer) ---------- */
+    const coName =
+      (profile && profile.companyName) || report.inspector_name || (profile && profile.fullName) || '';
+    const coLine = [
+      profile && profile.companyAddress,
+      profile && profile.phone,
+      profile && profile.email,
+    ]
+      .filter((v) => v && String(v).trim())
+      .join(' · ');
+    if (coName) {
+      ensureSpace(16);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10.5);
+      setColor(C.ink);
+      doc.text(coName, bodyX, y + 10.5);
+      y += 15;
+    }
+    if (coLine) {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      setColor(C.disclaimer);
+      for (const line of doc.splitTextToSize(coLine, bodyW)) {
+        ensureSpace(12);
+        doc.text(line, bodyX, y + 9);
+        y += 12;
+      }
     }
 
     doc.save(pdfFilename(report.address, isJob));
