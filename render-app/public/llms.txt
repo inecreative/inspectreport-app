@@ -23,6 +23,7 @@
 - App: https://inspect-report.com/app
 - Spectora alternative: https://inspect-report.com/spectora-alternative
 - HomeGauge alternative: https://inspect-report.com/homegauge-alternative
+- InspectForge alternative: https://inspect-report.com/inspectforge-alternative
 
 ## Blog (guides and comparisons, prices checked against vendor pages)
 - Blog index: https://inspect-report.com/blog
