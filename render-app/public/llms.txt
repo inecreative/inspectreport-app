@@ -16,7 +16,19 @@
 
 ## Who it's for
 - Solo home inspectors and small inspection teams in the US who write reports from field photos and notes
+- Home-repair pros (plumbing, roofing, painting, tile & flooring, handyman, HVAC, electrical) who document jobs for customers — each report can be an "Inspection Report" or a "Job Report"
 
 ## Links
 - Website: https://inspect-report.com/
 - App: https://inspect-report.com/app
+- Spectora alternative: https://inspect-report.com/spectora-alternative
+- HomeGauge alternative: https://inspect-report.com/homegauge-alternative
+
+## Blog (guides and comparisons, prices checked against vendor pages)
+- Blog index: https://inspect-report.com/blog
+- Best home inspection report software in 2026 — an honest ranking: https://inspect-report.com/blog/best-home-inspection-report-software
+- How to write a home inspection report faster: https://inspect-report.com/blog/write-home-inspection-report-faster
+- Spectora vs InspectReport AI — an honest comparison: https://inspect-report.com/blog/spectora-vs-inspectreport-ai
+- HomeGauge vs InspectReport AI — an honest comparison: https://inspect-report.com/blog/homegauge-vs-inspectreport-ai
+- How contractors can document jobs with photos and send a clean, priced PDF: https://inspect-report.com/blog/document-repair-jobs-photos-pdf
+- Home inspection report template — what a complete report includes: https://inspect-report.com/blog/home-inspection-report-template
