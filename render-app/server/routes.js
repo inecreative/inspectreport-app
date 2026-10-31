@@ -200,6 +200,32 @@ router.put(
   })
 );
 
+/* Change password from the User Profile page: the current password must
+   check out against the stored hash before the new one is saved. */
+router.put(
+  '/profile/password',
+  auth.requireAuth,
+  wrap(async (req, res) => {
+    const body = req.body || {};
+    const current = String(body.currentPassword || '');
+    const next = String(body.newPassword || '');
+    if (next.length < 8) {
+      return res.status(400).json({ error: 'New password must be at least 8 characters.' });
+    }
+    if (next === current) {
+      return res.status(400).json({ error: 'New password must be different from the current one.' });
+    }
+    const { rows } = await db.query('SELECT password_hash FROM users WHERE id = $1', [req.user.id]);
+    if (!rows.length) return res.status(404).json({ error: 'Account not found.' });
+    if (!(await auth.verifyPassword(current, rows[0].password_hash))) {
+      return res.status(401).json({ error: 'Current password is incorrect.' });
+    }
+    const hash = await auth.hashPassword(next);
+    await db.query('UPDATE users SET password_hash = $1 WHERE id = $2', [hash, req.user.id]);
+    return res.json({ ok: true });
+  })
+);
+
 /* ------------------------------------------------------------------ */
 /* Billing                                                             */
 /* ------------------------------------------------------------------ */
@@ -217,9 +243,10 @@ router.get(
       trialDaysLeft: 0,
     };
     let isAdmin = false;
+    let userRow = null;
     if (req.user) {
-      const row = await access.userById(req.user.id);
-      state = access.pdfAccessState(row || req.user);
+      userRow = await access.userById(req.user.id);
+      state = access.pdfAccessState(userRow || req.user);
       isAdmin = access.isAdminEmail(req.user.email);
     }
     res.json({
@@ -234,8 +261,108 @@ router.get(
       inTrial: state.inTrial,
       trialEndsAt: state.trialEndsAt,
       trialDaysLeft: state.trialDaysLeft,
+      cancelRequestedAt: userRow && userRow.cancel_requested_at ? userRow.cancel_requested_at : null,
+      cancelAtPeriodEnd: Boolean(userRow && userRow.cancel_at_period_end),
       isAdmin,
     });
+  })
+);
+
+/* Cancel the signed-in user's subscription from the User Profile page.
+   - Stripe subscribers: when STRIPE_SECRET_KEY is configured and we know
+     the subscription id (captured by the webhook at checkout), the
+     cancellation is sent to Stripe as cancel-at-period-end, so access
+     runs to the end of the paid period and the subscription.deleted
+     webhook then removes it. Without a key, the request is recorded
+     (cancel_requested_at) for the founder to process in Stripe — it
+     surfaces in the admin stats — and access stays active meanwhile.
+   - Manually granted access: revoked immediately (nothing is billed).
+   - Comp accounts have no paid subscription to cancel. */
+router.post(
+  '/billing/cancel',
+  auth.requireAuth,
+  wrap(async (req, res) => {
+    const row = await access.userById(req.user.id);
+    const stateNow = access.subscriptionState(row || req.user);
+    if (!stateNow.subscribed) {
+      return res.status(400).json({ error: 'No active subscription to cancel.' });
+    }
+    if (stateNow.subscribedVia === 'comp') {
+      return res
+        .status(400)
+        .json({ error: 'This account has complimentary access — there is no paid subscription to cancel.' });
+    }
+    if (stateNow.subscribedVia !== 'stripe') {
+      await access.setSubscribedByEmail(req.user.email, false, 'manual');
+      return res.json({ ok: true, mode: 'immediate' });
+    }
+    const key = process.env.STRIPE_SECRET_KEY;
+    const subId = row && row.stripe_subscription_id;
+    if (key && subId) {
+      const resp = await fetch(`https://api.stripe.com/v1/subscriptions/${encodeURIComponent(subId)}`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${key}`,
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({ cancel_at_period_end: 'true' }).toString(),
+      });
+      if (!resp.ok) {
+        const detail = await resp.text().catch(() => '');
+        console.error('[stripe] cancel-at-period-end failed:', resp.status, detail.slice(0, 200));
+        return res
+          .status(502)
+          .json({ error: 'Stripe could not process the cancellation. Please try again, or email us and we will cancel it for you.' });
+      }
+      const sub = await resp.json().catch(() => ({}));
+      await db.query(
+        'UPDATE users SET cancel_at_period_end = true, cancel_requested_at = NULL WHERE id = $1',
+        [req.user.id]
+      );
+      return res.json({
+        ok: true,
+        mode: 'period_end',
+        currentPeriodEnd: sub.current_period_end
+          ? new Date(sub.current_period_end * 1000).toISOString()
+          : null,
+      });
+    }
+    await db.query('UPDATE users SET cancel_requested_at = now() WHERE id = $1', [req.user.id]);
+    return res.json({ ok: true, mode: 'requested' });
+  })
+);
+
+/* Undo a pending cancellation (profile page "Keep my subscription"). */
+router.post(
+  '/billing/cancel/undo',
+  auth.requireAuth,
+  wrap(async (req, res) => {
+    const row = await access.userById(req.user.id);
+    if (!row) return res.status(404).json({ error: 'Account not found.' });
+    const key = process.env.STRIPE_SECRET_KEY;
+    if (row.cancel_at_period_end && key && row.stripe_subscription_id) {
+      const resp = await fetch(
+        `https://api.stripe.com/v1/subscriptions/${encodeURIComponent(row.stripe_subscription_id)}`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${key}`,
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: new URLSearchParams({ cancel_at_period_end: 'false' }).toString(),
+        }
+      );
+      if (!resp.ok) {
+        const detail = await resp.text().catch(() => '');
+        console.error('[stripe] undo cancel failed:', resp.status, detail.slice(0, 200));
+        return res.status(502).json({ error: 'Stripe could not undo the cancellation. Please try again.' });
+      }
+    }
+    await db.query(
+      'UPDATE users SET cancel_at_period_end = false, cancel_requested_at = NULL WHERE id = $1',
+      [req.user.id]
+    );
+    return res.json({ ok: true });
   })
 );
 
@@ -316,6 +443,12 @@ router.get(
     const { rows: recent } = await db.query(
       'SELECT email, created_at, subscribed, subscribed_via FROM users ORDER BY created_at DESC LIMIT 10'
     );
+    /* Pending cancellation requests (profile page) the founder still has
+       to process in Stripe — only relevant until a Stripe secret key is
+       configured on the server and cancellations become automatic. */
+    const { rows: cancelRows } = await db.query(
+      'SELECT email, cancel_requested_at FROM users WHERE cancel_requested_at IS NOT NULL ORDER BY cancel_requested_at ASC'
+    );
     return res.json({
       totalUsers,
       newToday,
@@ -326,6 +459,7 @@ router.get(
       totalReports,
       reports7d,
       recent,
+      cancelRequests: cancelRows.map((r) => ({ email: r.email, requestedAt: r.cancel_requested_at })),
     });
   })
 );
@@ -389,14 +523,40 @@ function emailFromEventObject(obj) {
 const DEAD_SUBSCRIPTION_STATUSES = new Set(['canceled', 'unpaid', 'incomplete_expired']);
 
 async function applyStripeSubscriptionState(eventType, obj) {
-  const email = emailFromEventObject(obj);
-  if (!email) {
-    // Subscription objects carry a customer id, not an email, and without
-    // a Stripe API key we cannot resolve it — log and move on.
+  let email = emailFromEventObject(obj);
+  let existing = email ? await access.userByEmail(email) : null;
+  if (!existing && obj && obj.customer) {
+    // Subscription objects carry a customer id, not an email. Resolve the
+    // account through the customer id the checkout event stored for it.
+    const { rows } = await db.query('SELECT * FROM users WHERE stripe_customer_id = $1', [
+      String(obj.customer),
+    ]);
+    existing = rows[0] || null;
+    if (existing) email = existing.email;
+  }
+  if (!existing) {
     console.warn(
-      `[stripe] ${eventType}: no customer email on event object (customer=${(obj && obj.customer) || 'n/a'}); no user updated.`
+      `[stripe] ${eventType}: no InspectReport account matched (email=${email || 'n/a'}, customer=${(obj && obj.customer) || 'n/a'}); event acknowledged only.`
     );
     return;
+  }
+  // Remember the Stripe linkage so later subscription events (and the
+  // profile page's cancel button) can find this subscription again.
+  const customerId = obj.customer ? String(obj.customer) : null;
+  let subscriptionId = null;
+  if (eventType === 'checkout.session.completed') {
+    subscriptionId = obj.subscription ? String(obj.subscription) : null;
+  } else if (obj.id) {
+    subscriptionId = String(obj.id);
+  }
+  if (customerId || subscriptionId) {
+    await db.query(
+      `UPDATE users
+          SET stripe_customer_id = COALESCE($1, stripe_customer_id),
+              stripe_subscription_id = COALESCE($2, stripe_subscription_id)
+        WHERE id = $3`,
+      [customerId, subscriptionId, existing.id]
+    );
   }
   let subscribed = null;
   if (eventType === 'checkout.session.completed') {
@@ -407,14 +567,24 @@ async function applyStripeSubscriptionState(eventType, obj) {
     eventType === 'customer.subscription.updated'
   ) {
     subscribed = !DEAD_SUBSCRIPTION_STATUSES.has(String(obj.status || ''));
+    // Mirror Stripe's scheduled cancellation so the profile page shows
+    // the same state Stripe does.
+    if (obj.cancel_at_period_end !== undefined) {
+      await db.query('UPDATE users SET cancel_at_period_end = $1 WHERE id = $2', [
+        Boolean(obj.cancel_at_period_end),
+        existing.id,
+      ]);
+    }
   } else if (eventType === 'customer.subscription.deleted') {
     subscribed = false;
   }
   if (subscribed === null) return;
-  const existing = await access.userByEmail(email);
-  if (!existing) {
-    console.warn(`[stripe] ${eventType}: no InspectReport account for ${email}; event acknowledged only.`);
-    return;
+  if (subscribed) {
+    // A (re)subscription clears any stale cancellation bookkeeping.
+    await db.query(
+      'UPDATE users SET cancel_requested_at = NULL, cancel_at_period_end = false WHERE id = $1',
+      [existing.id]
+    );
   }
   await access.setSubscribedByEmail(email, subscribed, 'stripe');
   console.log(`[stripe] ${eventType}: ${email} -> subscribed=${subscribed} (via stripe)`);
@@ -536,6 +706,14 @@ router.put(
     if (req.body.inspection_date !== undefined) {
       values.push(req.body.inspection_date || null);
       sets.push(`inspection_date = $${values.length}`);
+    }
+    if (req.body.doc_type !== undefined) {
+      const docType = String(req.body.doc_type);
+      if (docType !== 'inspection' && docType !== 'job') {
+        return res.status(400).json({ error: 'Invalid document type.' });
+      }
+      values.push(docType);
+      sets.push(`doc_type = $${values.length}`);
     }
     if (req.body.cover_photo_id !== undefined) {
       let coverId = req.body.cover_photo_id;
