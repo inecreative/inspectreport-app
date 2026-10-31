@@ -34,6 +34,9 @@ app.get('/spectora-alternative', (req, res) =>
 app.get('/homegauge-alternative', (req, res) =>
   res.sendFile(path.join(PUBLIC_DIR, 'homegauge-alternative.html'))
 );
+app.get('/inspectforge-alternative', (req, res) =>
+  res.sendFile(path.join(PUBLIC_DIR, 'inspectforge-alternative.html'))
+);
 // Blog: static HTML under public/blog/, one file per post. The slug
 // pattern is deliberately generic so new posts are just new files —
 // no route change needed when a post is published.
