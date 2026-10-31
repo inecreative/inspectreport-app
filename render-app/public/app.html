@@ -82,6 +82,7 @@
     <div id="editorView" class="hidden">
       <div class="row-between">
         <button id="backBtn" class="btn btn-ghost">← All reports</button>
+        <span id="saveStatus" class="save-status" aria-live="polite">All changes save automatically</span>
         <button id="deleteReportBtn" class="btn btn-danger-ghost">Delete report</button>
       </div>
 
@@ -92,13 +93,18 @@
       <div class="card">
         <h2>Property &amp; Client</h2>
         <div class="grid-2">
+          <label class="field"><span>Document type</span>
+            <select id="f_doc_type">
+              <option value="inspection">Inspection Report</option>
+              <option value="job">Job Report</option>
+            </select></label>
           <label class="field"><span>Property address</span>
             <input type="text" id="f_address" placeholder="123 Maple St, Austin, TX 78701" /></label>
-          <label class="field"><span>Inspection date</span>
+          <label class="field"><span id="f_inspection_date_label">Inspection date</span>
             <input type="date" id="f_inspection_date" /></label>
           <label class="field"><span>Client name</span>
             <input type="text" id="f_client_name" placeholder="Jordan Miller" /></label>
-          <label class="field"><span>Inspector name</span>
+          <label class="field"><span id="f_inspector_name_label">Inspector name</span>
             <input type="text" id="f_inspector_name" placeholder="Alex Carter, Licensed Inspector" /></label>
           <label class="field"><span>Client email</span>
             <input type="email" id="f_client_email" placeholder="client@example.com" /></label>
@@ -223,6 +229,22 @@
             </div>
             <p id="profileMsg" class="muted small" aria-live="polite"></p>
             <button type="submit" class="btn btn-amber">Save profile</button>
+          </form>
+        </div>
+
+        <div class="card">
+          <h2>Change password</h2>
+          <form id="passwordForm">
+            <div class="grid-2">
+              <label class="field"><span>Current password</span>
+                <input type="password" id="pw_current" autocomplete="current-password" /></label>
+              <label class="field"><span>New password</span>
+                <input type="password" id="pw_new" autocomplete="new-password" placeholder="At least 8 characters" /></label>
+              <label class="field"><span>Confirm new password</span>
+                <input type="password" id="pw_confirm" autocomplete="new-password" /></label>
+            </div>
+            <p id="passwordMsg" class="muted small" aria-live="polite"></p>
+            <button type="submit" class="btn btn-amber">Change password</button>
           </form>
         </div>
 
