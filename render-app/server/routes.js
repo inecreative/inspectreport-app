@@ -165,6 +165,7 @@ function profileJson(u) {
     fullName: u.full_name || '',
     companyName: u.company_name || '',
     phone: u.phone || '',
+    companyAddress: u.company_address || '',
   };
 }
 
@@ -173,7 +174,7 @@ router.get(
   auth.requireAuth,
   wrap(async (req, res) => {
     const { rows } = await db.query(
-      'SELECT email, full_name, company_name, phone FROM users WHERE id = $1',
+      'SELECT email, full_name, company_name, phone, company_address FROM users WHERE id = $1',
       [req.user.id]
     );
     if (!rows.length) return res.status(404).json({ error: 'Account not found.' });
@@ -189,11 +190,12 @@ router.put(
     const fullName = String(body.fullName ?? '').trim().slice(0, 120);
     const companyName = String(body.companyName ?? '').trim().slice(0, 120);
     const phone = String(body.phone ?? '').trim().slice(0, 40);
+    const companyAddress = String(body.companyAddress ?? '').trim().slice(0, 200);
     const { rows } = await db.query(
-      `UPDATE users SET full_name = $1, company_name = $2, phone = $3
-        WHERE id = $4
-        RETURNING email, full_name, company_name, phone`,
-      [fullName, companyName, phone, req.user.id]
+      `UPDATE users SET full_name = $1, company_name = $2, phone = $3, company_address = $4
+        WHERE id = $5
+        RETURNING email, full_name, company_name, phone, company_address`,
+      [fullName, companyName, phone, companyAddress, req.user.id]
     );
     if (!rows.length) return res.status(404).json({ error: 'Account not found.' });
     return res.json({ profile: profileJson(rows[0]) });
