@@ -5,7 +5,7 @@
 
 :root {
   color-scheme: light;
-  --bg: #F7F5F0;
+  --bg: #FFFFFF;
   --surface: #FFFFFF;
   --surface2: #FFFBEB;
   --line: #E7E2D6;
@@ -60,27 +60,29 @@ a { color: inherit; }
   font-size: 14.5px;
 }
 
-/* ---------- Header (sticky, navy, amber PDF button always visible) ---------- */
+/* ---------- Header (sticky, white, roomier) ---------- */
 .app-header {
   position: sticky;
   top: 0;
   z-index: 100;
-  background: var(--navy);
-  color: white;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, .28);
+  background: #fff;
+  color: var(--text);
+  border-bottom: 1px solid var(--line);
+  box-shadow: 0 6px 18px rgba(15, 42, 61, .05);
 }
 .header-inner {
   max-width: 1280px;
   margin: 0 auto;
-  padding: 12px 20px;
+  padding: 16px 24px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: 24px;
   flex-wrap: nowrap;
-  min-height: 68px;
+  min-height: 84px;
 }
 .brand { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+.brand-logo { height: 44px; width: auto; display: block; }
 .brand-mark {
   width: 40px;
   height: 40px;
@@ -115,13 +117,13 @@ a { color: inherit; }
 .step.active { background: white; color: var(--navy); }
 @media (max-width: 1180px) { .steps { display: none; } }
 .header-actions { display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
-.pdf-status { color: var(--amber-light); font-weight: 700; font-size: 14px; white-space: nowrap; }
+.pdf-status { color: var(--amber-text); font-weight: 700; font-size: 14px; white-space: nowrap; }
 .user-area { display: flex; align-items: center; gap: 10px; }
-.user-email { color: rgba(255, 255, 255, .85); font-size: 14px; font-weight: 600; }
+.user-email { color: var(--muted); font-size: 14px; font-weight: 600; }
 .app-header .btn-ghost {
   background: transparent;
-  border: 1.5px solid rgba(255, 255, 255, .4);
-  color: white;
+  border: 1.5px solid rgba(15, 42, 61, .3);
+  color: var(--navy);
   min-height: 40px;
   padding: 8px 14px;
   font-size: 14px;
@@ -140,11 +142,9 @@ a { color: inherit; }
 .profile-col input[disabled] { background: #EFECE5; color: var(--muted, #6B7280); }
 @media (max-width: 720px) { .user-email { display: none; } }
 @media (max-width: 640px) {
-  .header-inner { padding: 10px 14px; gap: 10px; min-height: 64px; }
+  .header-inner { padding: 12px 14px; gap: 10px; min-height: 68px; }
   .brand { gap: 9px; min-width: 0; }
-  .brand span { display: none; }
-  .brand b { font-size: 19px; }
-  .brand-mark { width: 36px; height: 36px; }
+  .brand-logo { height: 34px; }
   .header-actions .btn-primary { padding: 10px 14px; font-size: 14px; min-height: 44px; }
 }
 
@@ -263,7 +263,7 @@ h1 { font-family: Archivo, sans-serif; font-size: 28px; font-weight: 800; letter
 
 /* ---------- Auth (simple sign-in, no marketing hero) ---------- */
 .auth-intro { text-align: center; margin: 30px auto 0; }
-.auth-intro .brand-mark { width: 48px; height: 48px; font-size: 24px; margin: 0 auto; border-radius: 8px; }
+.auth-intro .auth-logo { width: 56px; height: 56px; object-fit: contain; margin: 0 auto; display: block; }
 .auth-intro h1 { font-size: 26px; margin: 12px 0 4px; }
 .auth-intro p { color: var(--muted); font-size: 15px; margin: 0; }
 .auth-card { max-width: 440px; margin: 20px auto 30px; padding: 24px; }
