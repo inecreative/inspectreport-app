@@ -1,10 +1,10 @@
 /* InspectReport AI — landing page styles.
    Uses the same design tokens, fonts and component language as the app
-   (public/styles.css): cream #F7F5F0, navy #0F2A3D, amber #D97706,
+   (public/styles.css): natural white background, navy #0F2A3D, amber #D97706,
    Archivo headings + Inter body. Light scheme only. */
 
 :root {
-  --bg: #F7F5F0;
+  --bg: #FFFFFF;
   --surface: #FFFFFF;
   --surface2: #FFFBEB;
   --line: #E7E2D6;
@@ -54,22 +54,25 @@ img { max-width: 100%; display: block; }
 .btn:hover { filter: brightness(1.05); }
 .btn-amber { background: var(--amber); color: #fff; }
 .btn-white { background: var(--surface); color: var(--navy); border: 1.5px solid var(--line); }
-.btn-header-ghost { background: transparent; color: #fff; border: 1.5px solid rgba(255,255,255,.45); }
-.btn-header-ghost:hover { background: rgba(255,255,255,.08); }
+.btn-header-ghost { background: transparent; color: var(--navy); border: 1.5px solid rgba(15,42,61,.35); }
+.btn-header-ghost:hover { background: rgba(15,42,61,.05); }
 .btn-big { font-size: 17px; padding: 14px 26px; }
 .btn-block { width: 100%; }
 
 /* ---------- header ---------- */
 .lp-header {
-  background: var(--navy); color: #fff;
+  background: #fff; color: var(--navy);
   position: sticky; top: 0; z-index: 50;
-  box-shadow: 0 2px 8px rgba(15,42,61,.25);
+  border-bottom: 1px solid var(--line);
+  box-shadow: 0 6px 18px rgba(15,42,61,.05);
 }
 .lp-header-inner {
-  max-width: 1180px; margin: 0 auto; padding: 12px 20px;
-  display: flex; align-items: center; gap: 24px;
+  max-width: 1280px; margin: 0 auto; padding: 18px 24px;
+  display: flex; align-items: center; gap: 32px;
 }
-.lp-brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: #fff; }
+.lp-brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--navy); }
+.lp-logo { height: 46px; width: auto; display: block; }
+.lp-brand-icon { width: 40px; height: 40px; object-fit: contain; flex: none; display: block; }
 .lp-brand-mark {
   font-size: 22px; background: var(--amber); border-radius: 8px;
   width: 40px; height: 40px; display: inline-flex; align-items: center; justify-content: center;
@@ -78,9 +81,9 @@ img { max-width: 100%; display: block; }
 .lp-brand-text { display: flex; flex-direction: column; line-height: 1.15; }
 .lp-brand-text b { font-family: 'Archivo', sans-serif; font-size: 19px; font-weight: 800; letter-spacing: -.01em; }
 .lp-brand-text span { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; opacity: .75; }
-.lp-nav { display: flex; gap: 22px; margin-left: auto; }
-.lp-nav a { color: rgba(255,255,255,.85); text-decoration: none; font-size: 15px; font-weight: 600; }
-.lp-nav a:hover { color: #fff; }
+.lp-nav { display: flex; gap: 30px; margin-left: auto; }
+.lp-nav a { color: rgba(15,42,61,.78); text-decoration: none; font-size: 15px; font-weight: 600; }
+.lp-nav a:hover { color: var(--navy); }
 .lp-header-actions { display: flex; gap: 10px; margin-left: auto; }
 .lp-header-actions .btn { padding: 9px 16px; }
 .lp-nav + .lp-header-actions { margin-left: 0; }
