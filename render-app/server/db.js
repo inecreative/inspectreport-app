@@ -122,6 +122,20 @@ const SCHEMA = [
      Must run AFTER the reports table exists (production DBs created
      before this column upgrade on boot, like the users columns above). */
   `ALTER TABLE reports ADD COLUMN IF NOT EXISTS cover_photo_id INTEGER`,
+  /* Per-report document type: 'inspection' (default — every existing
+     report keeps the current wording) or 'job', for trades users who
+     send customers a "Job Report" instead of an inspection report.
+     Must run AFTER the reports table exists. */
+  `ALTER TABLE reports ADD COLUMN IF NOT EXISTS doc_type TEXT NOT NULL DEFAULT 'inspection'`,
+  /* Stripe linkage + cancellation bookkeeping behind the User Profile
+     page's subscribe / cancel controls. The customer/subscription ids
+     are captured from webhook events; cancel_requested_at records a
+     cancellation the founder still has to process in Stripe when no
+     Stripe secret key is configured on the server. */
+  `ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT`,
+  `ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_subscription_id TEXT`,
+  `ALTER TABLE users ADD COLUMN IF NOT EXISTS cancel_requested_at TIMESTAMPTZ`,
+  `ALTER TABLE users ADD COLUMN IF NOT EXISTS cancel_at_period_end BOOLEAN NOT NULL DEFAULT false`,
 ];
 
 async function init() {
