@@ -676,7 +676,15 @@ router.post(
       'INSERT INTO reports (user_id, inspector_name) VALUES ($1, $2) RETURNING id',
       [req.user.id, inspectorName]
     );
-    res.status(201).json({ report: await byId('reports', rows[0].id) });
+    const report = await byId('reports', rows[0].id);
+    // Optional: start the new report from a saved report template — its
+    // custom fields are copied in (see the report-templates section).
+    const templateId = req.body && req.body.templateId ? Number(req.body.templateId) : null;
+    if (templateId) {
+      const tpl = await ownReportTemplate(req.user.id, templateId);
+      if (tpl) await copyTemplateFieldsToReport(tpl, report.id);
+    }
+    res.status(201).json({ report });
   })
 );
 
@@ -865,6 +873,192 @@ router.delete(
     );
     if (!rowCount) return res.status(404).json({ error: 'Template not found.' });
     return res.json({ ok: true });
+  })
+);
+
+/* ------------------------------------------------------------------ */
+/* Report templates (per user): a named SET of custom fields.          */
+/*                                                                     */
+/* A user builds a template once — e.g. "Condo inspection" with        */
+/* fields Unit #, HOA, Parking spot — saves it, then applies it to     */
+/* any report in one tap. Applying COPIES the template's fields into   */
+/* the report's own custom_fields (skipping names the report already   */
+/* has), so editing a template never changes reports already made,     */
+/* and editing a report never changes the template.                    */
+/* ------------------------------------------------------------------ */
+
+const MAX_REPORT_TEMPLATES = 50;
+const MAX_TEMPLATE_FIELDS = 30;
+
+function cleanTemplateName(raw) {
+  return String(raw ?? '').trim().slice(0, 80);
+}
+
+/** Keep only rows with a non-empty field name; values are defaults and
+    may be empty (the user fills them in per report after applying). */
+function cleanTemplateFields(raw) {
+  if (!Array.isArray(raw)) return [];
+  const out = [];
+  for (const f of raw.slice(0, MAX_TEMPLATE_FIELDS)) {
+    const name = String((f && f.name) ?? '').trim().slice(0, 80);
+    if (!name) continue;
+    const value = String((f && f.value) ?? '').trim().slice(0, 200);
+    out.push({ name, value });
+  }
+  return out;
+}
+
+async function templateWithFields(tpl) {
+  const { rows } = await db.query(
+    'SELECT * FROM report_template_fields WHERE template_id = $1 ORDER BY sort_order, id',
+    [tpl.id]
+  );
+  return { ...tpl, fields: rows };
+}
+
+async function ownReportTemplate(userId, templateId) {
+  const { rows } = await db.query(
+    'SELECT * FROM report_templates WHERE id = $1 AND user_id = $2',
+    [templateId, userId]
+  );
+  if (!rows.length) return null;
+  return templateWithFields(rows[0]);
+}
+
+async function saveTemplateFields(templateId, fields) {
+  await db.query('DELETE FROM report_template_fields WHERE template_id = $1', [templateId]);
+  for (let i = 0; i < fields.length; i += 1) {
+    // eslint-disable-next-line no-await-in-loop
+    await db.query(
+      'INSERT INTO report_template_fields (template_id, name, value, sort_order) VALUES ($1, $2, $3, $4)',
+      [templateId, fields[i].name, fields[i].value, i]
+    );
+  }
+}
+
+/** Copy a template's fields into a report, skipping field names the
+    report already has (case-insensitive). Returns {added, skipped}. */
+async function copyTemplateFieldsToReport(tpl, reportId) {
+  const { rows: existing } = await db.query(
+    'SELECT name FROM custom_fields WHERE report_id = $1',
+    [reportId]
+  );
+  const have = new Set(existing.map((r) => String(r.name || '').trim().toLowerCase()));
+  const { rows: maxRows } = await db.query(
+    'SELECT COALESCE(MAX(sort_order), -1) AS m FROM custom_fields WHERE report_id = $1',
+    [reportId]
+  );
+  let order = maxRows[0].m;
+  let added = 0;
+  let skipped = 0;
+  for (const f of tpl.fields) {
+    const key = f.name.trim().toLowerCase();
+    if (have.has(key)) {
+      skipped += 1;
+      continue;
+    }
+    have.add(key);
+    order += 1;
+    // eslint-disable-next-line no-await-in-loop
+    await db.query(
+      'INSERT INTO custom_fields (report_id, name, value, sort_order) VALUES ($1, $2, $3, $4)',
+      [reportId, f.name, f.value, order]
+    );
+    added += 1;
+  }
+  if (added) await touchReport(reportId);
+  return { added, skipped };
+}
+
+router.get(
+  '/report-templates',
+  auth.requireAuth,
+  wrap(async (req, res) => {
+    const { rows } = await db.query(
+      'SELECT * FROM report_templates WHERE user_id = $1 ORDER BY id',
+      [req.user.id]
+    );
+    const templates = [];
+    for (const tpl of rows) {
+      // eslint-disable-next-line no-await-in-loop
+      templates.push(await templateWithFields(tpl));
+    }
+    res.json({ templates });
+  })
+);
+
+router.post(
+  '/report-templates',
+  auth.requireAuth,
+  wrap(async (req, res) => {
+    const name = cleanTemplateName(req.body && req.body.name);
+    if (!name) return res.status(400).json({ error: 'Give the template a name.' });
+    const { rows: countRows } = await db.query(
+      'SELECT COUNT(*)::int AS n FROM report_templates WHERE user_id = $1',
+      [req.user.id]
+    );
+    if (Number(countRows[0].n || 0) >= MAX_REPORT_TEMPLATES) {
+      return res.status(400).json({ error: `You can save up to ${MAX_REPORT_TEMPLATES} report templates.` });
+    }
+    const fields = cleanTemplateFields(req.body && req.body.fields);
+    const { rows } = await db.query(
+      'INSERT INTO report_templates (user_id, name) VALUES ($1, $2) RETURNING id',
+      [req.user.id, name]
+    );
+    await saveTemplateFields(rows[0].id, fields);
+    return res.status(201).json({ template: await ownReportTemplate(req.user.id, rows[0].id) });
+  })
+);
+
+router.put(
+  '/report-templates/:id',
+  auth.requireAuth,
+  wrap(async (req, res) => {
+    const tpl = await ownReportTemplate(req.user.id, req.params.id);
+    if (!tpl) return res.status(404).json({ error: 'Template not found.' });
+    const name = cleanTemplateName(req.body && req.body.name);
+    if (!name) return res.status(400).json({ error: 'Give the template a name.' });
+    const fields = cleanTemplateFields(req.body && req.body.fields);
+    await db.query('UPDATE report_templates SET name = $1, updated_at = now() WHERE id = $2', [
+      name,
+      tpl.id,
+    ]);
+    await saveTemplateFields(tpl.id, fields);
+    return res.json({ template: await ownReportTemplate(req.user.id, tpl.id) });
+  })
+);
+
+router.delete(
+  '/report-templates/:id',
+  auth.requireAuth,
+  wrap(async (req, res) => {
+    const { rowCount } = await db.query(
+      'DELETE FROM report_templates WHERE id = $1 AND user_id = $2',
+      [req.params.id, req.user.id]
+    );
+    if (!rowCount) return res.status(404).json({ error: 'Template not found.' });
+    return res.json({ ok: true });
+  })
+);
+
+/* Apply a report template to a report: copy its fields in, skipping
+   names the report already has. Returns the apply counts plus the full
+   updated report payload so the editor can re-render in one round trip. */
+router.post(
+  '/reports/:id/apply-template',
+  auth.requireAuth,
+  wrap(async (req, res) => {
+    const report = await ownReport(req.user.id, req.params.id);
+    if (!report) return res.status(404).json({ error: 'Report not found.' });
+    const templateId = req.body && req.body.templateId ? Number(req.body.templateId) : null;
+    const tpl = templateId ? await ownReportTemplate(req.user.id, templateId) : null;
+    if (!tpl) return res.status(404).json({ error: 'Template not found.' });
+    if (!tpl.fields.length) {
+      return res.status(400).json({ error: 'This template has no fields yet — add some first.' });
+    }
+    const { added, skipped } = await copyTemplateFieldsToReport(tpl, report.id);
+    const data = await fullReport(req.user.id, report.id);
+    return res.json({ ...data, applied: { templateName: tpl.name, added, skipped } });
   })
 );
 
