@@ -107,6 +107,11 @@ const SCHEMA = [
      sort_order INTEGER NOT NULL DEFAULT 0,
      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
    )`,
+  /* Voice-to-Finding metadata: the raw (transcribed or typed) note a
+     finding was structured from, and how it arrived ('text' | 'voice').
+     Must run AFTER the findings table exists. */
+  `ALTER TABLE findings ADD COLUMN IF NOT EXISTS raw_note TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE findings ADD COLUMN IF NOT EXISTS input_source TEXT NOT NULL DEFAULT 'text'`,
   `CREATE TABLE IF NOT EXISTS photos (
      id SERIAL PRIMARY KEY,
      report_id INTEGER NOT NULL REFERENCES reports(id) ON DELETE CASCADE,
