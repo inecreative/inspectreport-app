@@ -674,7 +674,7 @@ function renderCustomFields() {
       <div class="cf-row" data-field="${f.id}">
         <input class="cf-name" value="${esc(f.name)}" placeholder="Field name" />
         <input class="cf-value" value="${esc(f.value)}" placeholder="Value" />
-        <button class="btn btn-white btn-sm" data-save-template="${f.id}">+ Add</button>
+        <button class="btn btn-white btn-sm" data-add-below="${f.id}">+ Add</button>
         <button class="btn btn-danger-ghost btn-sm" data-del-field="${f.id}">Delete</button>
       </div>`
     )
@@ -700,15 +700,21 @@ function renderCustomFields() {
       await refreshCurrent();
     });
   });
-  wrap.querySelectorAll('[data-save-template]').forEach((btn) => {
+  wrap.querySelectorAll('[data-add-below]').forEach((btn) => {
     btn.addEventListener('click', async () => {
-      const f = state.current.customFields.find((x) => x.id === Number(btn.dataset.saveTemplate));
-      if (!f) return;
-      await api('/api/templates', {
+      if (!state.current) return;
+      const { field } = await api(`/api/reports/${state.current.report.id}/fields`, {
         method: 'POST',
-        body: JSON.stringify({ name: f.name, value: f.value }),
+        body: JSON.stringify({ name: '', value: '', afterId: Number(btn.dataset.addBelow) }),
       });
-      await loadTemplates();
+      await refreshCurrent();
+      if (field) {
+        const input = document.querySelector(`#customFieldList [data-field="${field.id}"] .cf-name`);
+        if (input) {
+          input.scrollIntoView({ block: 'nearest' });
+          input.focus();
+        }
+      }
     });
   });
 }
@@ -722,75 +728,67 @@ $('#addFieldBtn').addEventListener('click', async () => {
   await refreshCurrent();
 });
 
-/* --- Saved templates --- */
+/* --- Report templates (simple: name only) --- */
 async function loadTemplates() {
-  const { templates } = await api('/api/templates');
+  const { templates } = await api('/api/report-templates');
   state.templates = templates;
   renderTemplates();
 }
 
 function renderTemplates() {
-  const wrap = $('#templateList');
+  const wrap = $('#reportTemplateList');
   if (!wrap) return;
   if (!state.templates.length) {
-    wrap.innerHTML = '<p class="muted small">No saved fields yet.</p>';
+    wrap.innerHTML = '';
     return;
   }
   wrap.innerHTML = state.templates
     .map(
       (t) => `
-      <div class="tpl-row" data-template="${t.id}">
-        <input class="tpl-name" value="${esc(t.name)}" placeholder="Field name" />
-        <input class="tpl-value" value="${esc(t.value)}" placeholder="Value" />
-        <button class="btn btn-amber btn-sm" data-add-template="${t.id}">+ Add to report</button>
+      <div class="tpl-row">
+        <span class="tpl-title">${esc(t.name)}</span>
+        <span class="muted small">${t.fieldCount} field${t.fieldCount === 1 ? '' : 's'}</span>
+        <button class="btn btn-white btn-sm" data-apply-template="${t.id}">+ Add</button>
         <button class="btn btn-danger-ghost btn-sm" data-del-template="${t.id}">Delete</button>
       </div>`
     )
     .join('');
-  wrap.querySelectorAll('[data-template]').forEach((row) => {
-    const id = Number(row.dataset.template);
-    const save = async () => {
-      await api(`/api/templates/${id}`, {
-        method: 'PUT',
-        body: JSON.stringify({
-          name: row.querySelector('.tpl-name').value,
-          value: row.querySelector('.tpl-value').value,
-        }),
-      });
-      await loadTemplates();
-    };
-    row.querySelector('.tpl-name').addEventListener('change', save);
-    row.querySelector('.tpl-value').addEventListener('change', save);
-  });
-  wrap.querySelectorAll('[data-add-template]').forEach((btn) => {
+  wrap.querySelectorAll('[data-apply-template]').forEach((btn) => {
     btn.addEventListener('click', async () => {
-      const t = state.templates.find((x) => x.id === Number(btn.dataset.addTemplate));
-      if (!t || !state.current) return;
-      await api(`/api/reports/${state.current.report.id}/fields`, {
+      if (!state.current) return;
+      await api(`/api/reports/${state.current.report.id}/apply-template`, {
         method: 'POST',
-        body: JSON.stringify({ name: t.name, value: t.value }),
+        body: JSON.stringify({ templateId: Number(btn.dataset.applyTemplate) }),
       });
       await refreshCurrent();
     });
   });
   wrap.querySelectorAll('[data-del-template]').forEach((btn) => {
     btn.addEventListener('click', async () => {
-      await api(`/api/templates/${btn.dataset.delTemplate}`, { method: 'DELETE' });
+      await api(`/api/report-templates/${btn.dataset.delTemplate}`, { method: 'DELETE' });
       await loadTemplates();
     });
   });
 }
 
-$('#addTemplateBtn').addEventListener('click', async () => {
-  const name = $('#tplName').value.trim();
-  if (!name) return;
-  await api('/api/templates', {
-    method: 'POST',
-    body: JSON.stringify({ name, value: $('#tplValue').value }),
-  });
-  $('#tplName').value = '';
-  $('#tplValue').value = '';
-  await loadTemplates();
+$('#saveAsTemplateBtn').addEventListener('click', async () => {
+  if (!state.current) return;
+  const input = $('#rtName');
+  const name = input.value.trim();
+  if (!name) {
+    input.focus();
+    return;
+  }
+  try {
+    await api('/api/report-templates', {
+      method: 'POST',
+      body: JSON.stringify({ name, reportId: state.current.report.id }),
+    });
+    input.value = '';
+    await loadTemplates();
+  } catch (err) {
+    window.alert(err.message);
+  }
 });
 
 /* --- Photos --- */
