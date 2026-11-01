@@ -41,6 +41,13 @@ const upload = multer({
   },
 });
 
+/* Voice notes: audio is transcribed and discarded, never stored, so it
+   goes to memory only (25 MB is far beyond a 60-second voice note). */
+const uploadAudio = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 25 * 1024 * 1024, files: 1 },
+});
+
 /* ------------------------------------------------------------------ */
 /* Helpers                                                             */
 /* ------------------------------------------------------------------ */
@@ -884,8 +891,8 @@ router.post(
     );
     const b = req.body || {};
     const { rows } = await db.query(
-      `INSERT INTO findings (report_id, area, title, detail, severity, cost, sort_order)
-       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+      `INSERT INTO findings (report_id, area, title, detail, severity, cost, sort_order, raw_note, input_source)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
       [
         report.id,
         String(b.area || 'General'),
@@ -894,6 +901,8 @@ router.post(
         ai.SEVERITIES.includes(b.severity) ? b.severity : 'Monitor',
         Number(b.cost) || 0,
         maxRows[0].m + 1,
+        String(b.raw_note || b.rawNote || ''),
+        b.input_source === 'voice' || b.inputSource === 'voice' ? 'voice' : 'text',
       ]
     );
     await touchReport(report.id);
@@ -919,14 +928,21 @@ router.put(
     if (!finding) return res.status(404).json({ error: 'Finding not found.' });
     const b = req.body || {};
     await db.query(
-      `UPDATE findings SET area = $1, title = $2, detail = $3, severity = $4, cost = $5
-        WHERE id = $6`,
+      `UPDATE findings SET area = $1, title = $2, detail = $3, severity = $4, cost = $5,
+              raw_note = $6, input_source = $7
+        WHERE id = $8`,
       [
         String(b.area ?? finding.area),
         String(b.title ?? finding.title),
         String(b.detail ?? finding.detail),
         ai.SEVERITIES.includes(b.severity) ? b.severity : finding.severity,
         b.cost !== undefined ? Number(b.cost) || 0 : Number(finding.cost),
+        String(b.raw_note ?? b.rawNote ?? finding.raw_note ?? ''),
+        b.input_source === 'voice' || b.inputSource === 'voice'
+          ? 'voice'
+          : b.input_source === 'text' || b.inputSource === 'text'
+            ? 'text'
+            : finding.input_source || 'text',
         finding.id,
       ]
     );
@@ -959,6 +975,18 @@ router.post(
     if (!report) return res.status(404).json({ error: 'Report not found.' });
     const notes = String(req.body.notes || '').trim();
     if (!notes) return res.status(400).json({ error: 'Write some field notes first.' });
+    const isVoice = req.body.inputSource === 'voice' || req.body.input_source === 'voice';
+    // Voice-to-Finding: the photo was uploaded first (unattached); it is
+    // bound to the first finding created here, and the transcript is kept
+    // on that finding as its raw note.
+    let photoId = req.body.photoId ? Number(req.body.photoId) : null;
+    if (photoId) {
+      const { rows: prow } = await db.query(
+        'SELECT id FROM photos WHERE id = $1 AND report_id = $2',
+        [photoId, report.id]
+      );
+      if (!prow.length) photoId = null;
+    }
     const drafts = await ai.structureNotes(notes);
     const { rows: maxRows } = await db.query(
       'SELECT COALESCE(MAX(sort_order), -1) AS m FROM findings WHERE report_id = $1',
@@ -976,6 +1004,18 @@ router.post(
       );
       // eslint-disable-next-line no-await-in-loop
       created.push(shapeFinding(await byId('findings', rows[0].id)));
+    }
+    if (created.length && isVoice) {
+      await db.query('UPDATE findings SET raw_note = $1, input_source = $2 WHERE id = $3', [
+        notes,
+        'voice',
+        created[0].id,
+      ]);
+      created[0].raw_note = notes;
+      created[0].input_source = 'voice';
+      if (photoId) {
+        await db.query('UPDATE photos SET finding_id = $1 WHERE id = $2', [created[0].id, photoId]);
+      }
     }
     await touchReport(report.id);
     return res.status(201).json({ findings: created, aiUsed: ai.aiConfigured() });
@@ -1002,6 +1042,98 @@ router.post(
       finding: shapeFinding(await byId('findings', finding.id)),
       aiUsed: ai.aiConfigured(),
     });
+  })
+);
+
+/* Re-structure a finding from its (edited) raw note — the Voice-to-Finding
+   "fix a misheard word, then Re-structure" path. Uses the first draft the
+   structurer returns and updates this finding in place; photos stay put. */
+router.post(
+  '/findings/:id/restructure',
+  auth.requireAuth,
+  wrap(async (req, res) => {
+    const finding = await ownFinding(req.user.id, req.params.id);
+    if (!finding) return res.status(404).json({ error: 'Finding not found.' });
+    const notes = String(req.body.notes ?? req.body.rawNote ?? '').trim();
+    if (!notes) return res.status(400).json({ error: 'The raw note is empty.' });
+    const drafts = await ai.structureNotes(notes);
+    if (!drafts.length) return res.status(400).json({ error: 'Could not structure that note.' });
+    const d = drafts[0];
+    await db.query(
+      `UPDATE findings SET area = $1, title = $2, detail = $3, severity = $4, cost = $5, raw_note = $6
+        WHERE id = $7`,
+      [d.area, d.title, d.detail, d.severity, d.cost, notes, finding.id]
+    );
+    await touchReport(finding.report_id);
+    return res.json({
+      finding: shapeFinding(await byId('findings', finding.id)),
+      aiUsed: ai.aiConfigured(),
+    });
+  })
+);
+
+/* ------------------------------------------------------------------ */
+/* Voice transcription (fallback speech-to-text)                       */
+/*                                                                     */
+/* The app first tries the browser's built-in speech recognition       */
+/* (free, live). Browsers without it (notably iOS Safari) record the   */
+/* note instead and post it here. This endpoint forwards the audio to  */
+/* any OpenAI-compatible /audio/transcriptions service configured via  */
+/* STT_API_KEY / STT_API_BASE_URL / STT_MODEL (e.g. Groq Whisper).     */
+/* With no STT key configured it answers 501 and the client falls      */
+/* back to typing the note — the rest of the flow is unaffected.       */
+/* ------------------------------------------------------------------ */
+
+function sttConfigured() {
+  return Boolean(process.env.STT_API_KEY);
+}
+
+router.post(
+  '/transcribe',
+  auth.requireAuth,
+  uploadAudio.single('audio'),
+  wrap(async (req, res) => {
+    if (!sttConfigured()) {
+      return res.status(501).json({
+        error:
+          'Voice transcription is not set up on the server yet. Type your note in the box instead — everything else works the same.',
+      });
+    }
+    if (!req.file || !req.file.buffer || !req.file.buffer.length) {
+      return res.status(400).json({ error: 'No audio was received.' });
+    }
+    const base = (process.env.STT_API_BASE_URL || 'https://api.groq.com/openai/v1').replace(/\/+$/, '');
+    const model = process.env.STT_MODEL || 'whisper-large-v3-turbo';
+    const form = new FormData();
+    const type = req.file.mimetype || 'audio/webm';
+    const ext = type.includes('mp4') ? 'mp4' : type.includes('wav') ? 'wav' : type.includes('mpeg') ? 'mp3' : 'webm';
+    form.append('file', new Blob([req.file.buffer], { type }), `note.${ext}`);
+    form.append('model', model);
+    form.append('response_format', 'json');
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 60000);
+    try {
+      const resp = await fetch(`${base}/audio/transcriptions`, {
+        method: 'POST',
+        signal: controller.signal,
+        headers: { Authorization: `Bearer ${process.env.STT_API_KEY}` },
+        body: form,
+      });
+      if (!resp.ok) {
+        const detail = await resp.text().catch(() => '');
+        console.error('[stt] transcription failed:', resp.status, detail.slice(0, 200));
+        return res.status(502).json({ error: 'Transcription failed. Type your note in the box instead.' });
+      }
+      const data = await resp.json().catch(() => ({}));
+      const text = String(data.text || '').trim();
+      if (!text) return res.status(502).json({ error: 'No speech was detected. Try again, or type your note.' });
+      return res.json({ text });
+    } catch (err) {
+      console.error('[stt] request failed:', err.message);
+      return res.status(502).json({ error: 'Transcription failed. Type your note in the box instead.' });
+    } finally {
+      clearTimeout(timer);
+    }
   })
 );
 
