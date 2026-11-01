@@ -170,7 +170,7 @@ a { color: inherit; }
 .btn:disabled { opacity: .5; cursor: not-allowed; }
 .btn-primary, .btn-amber { background: var(--amber); color: white; }
 .btn-navy { background: var(--navy); color: white; }
-.btn-white { background: white; color: var(--navy); }
+.btn-white { background: white; color: var(--navy); border-color: var(--line); }
 .btn-ghost { background: var(--surface); border-color: var(--line); color: var(--text); }
 .btn-danger-ghost { background: var(--surface); border-color: #F1B8B8; color: var(--red); }
 .btn-sm { padding: 9px 14px; font-size: 13.5px; min-height: 40px; }
@@ -313,13 +313,6 @@ h1 { font-family: Archivo, sans-serif; font-size: 28px; font-weight: 800; letter
 .cf-row input.cf-name, .tpl-row input.tpl-name { flex: 1 1 160px; width: auto; }
 .cf-row input.cf-value, .tpl-row input.tpl-value { flex: 2 1 220px; width: auto; }
 
-/* Report templates (named sets of custom fields) */
-.rt-row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; border: 1.5px solid var(--line); border-radius: 10px; padding: 10px 12px; }
-.rt-info { flex: 1 1 220px; min-width: 0; }
-.rt-name { font-weight: 700; }
-.rt-editor { border: 1.5px solid var(--amber); border-radius: 10px; padding: 14px; margin: 12px 0; background: var(--surface); }
-.rt-editor-title { font-family: Archivo, sans-serif; font-size: 16px; font-weight: 800; margin: 0 0 10px; }
-.rt-save-current { margin-top: 8px; }
 
 /* ---------- Photos ---------- */
 .photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-top: 14px; }
