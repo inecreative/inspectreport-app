@@ -9,6 +9,7 @@ const state = {
   billing: null,
   profile: null,
   templates: [],
+  reportTemplates: [], // named SETS of custom fields (see Report templates)
   current: null, // { report, customFields, findings, photos }
   authMode: 'login', // or 'signup'
 };
@@ -500,6 +501,7 @@ $('#passwordForm').addEventListener('submit', async (e) => {
 /* ---------------------------------------------------------------- */
 
 async function loadReports() {
+  await loadReportTemplates();
   const { reports } = await api('/api/reports');
   const list = $('#reportList');
   $('#listEmpty').classList.toggle('hidden', reports.length > 0);
@@ -525,7 +527,12 @@ async function loadReports() {
 }
 
 $('#newReportBtn').addEventListener('click', async () => {
-  const { report } = await api('/api/reports', { method: 'POST', body: '{}' });
+  const sel = $('#startTemplateSelect');
+  const templateId = sel && sel.value ? Number(sel.value) : null;
+  const { report } = await api('/api/reports', {
+    method: 'POST',
+    body: JSON.stringify(templateId ? { templateId } : {}),
+  });
   await openReport(report.id);
 });
 
@@ -533,6 +540,7 @@ $('#sampleBtn').addEventListener('click', async () => {
   const data = await api('/api/reports/sample', { method: 'POST', body: '{}' });
   state.current = data;
   await loadTemplates();
+  await loadReportTemplates();
   showEditor();
 });
 
@@ -543,6 +551,7 @@ $('#sampleBtn').addEventListener('click', async () => {
 async function openReport(id) {
   state.current = await api(`/api/reports/${id}`);
   await loadTemplates();
+  await loadReportTemplates();
   showEditor();
 }
 
@@ -598,6 +607,7 @@ function renderEditor() {
   renderStats();
   renderCustomFields();
   renderTemplates();
+  renderReportTemplates();
   renderPhotos();
   renderFindings();
   renderPreview();
@@ -791,6 +801,247 @@ $('#addTemplateBtn').addEventListener('click', async () => {
   $('#tplName').value = '';
   $('#tplValue').value = '';
   await loadTemplates();
+});
+
+/* --- Report templates: named SETS of custom fields ------------------
+   Build a set once (e.g. "Condo inspection": Unit #, HOA, Parking),
+   save it, then apply it to any report in one tap or start a new
+   report from it on the reports list. Applying copies the fields into
+   the report — later template edits never change existing reports. */
+let rtDraft = null; // { id|null, name, fields:[{name,value}] } while editing
+
+function rtMsg(text) {
+  const el = $('#rtMsg');
+  if (el) el.textContent = text || '';
+}
+
+async function loadReportTemplates() {
+  if (!state.user) return;
+  try {
+    const { templates } = await api('/api/report-templates');
+    state.reportTemplates = templates || [];
+  } catch (_) {
+    state.reportTemplates = [];
+  }
+  renderReportTemplates();
+  renderStartTemplateSelect();
+}
+
+function renderStartTemplateSelect() {
+  const sel = $('#startTemplateSelect');
+  if (!sel) return;
+  const prev = sel.value;
+  sel.innerHTML =
+    '<option value="">Blank report</option>' +
+    state.reportTemplates
+      .map((t) => `<option value="${t.id}">${esc(t.name)} (${(t.fields || []).length} fields)</option>`)
+      .join('');
+  if (prev && state.reportTemplates.some((t) => String(t.id) === prev)) sel.value = prev;
+}
+
+function renderReportTemplates() {
+  const wrap = $('#reportTemplateList');
+  if (!wrap) return;
+  if (!state.reportTemplates.length) {
+    wrap.innerHTML = '<p class="muted small">No report templates yet. Create one below, or save this report\'s fields as a template.</p>';
+  } else {
+    wrap.innerHTML = state.reportTemplates
+      .map((t) => {
+        const fields = t.fields || [];
+        const names = fields.map((f) => f.name).filter(Boolean).join(', ');
+        return `
+      <div class="rt-row" data-rt="${t.id}">
+        <div class="rt-info">
+          <div class="rt-name">${esc(t.name)}</div>
+          <div class="muted small">${fields.length} field${fields.length === 1 ? '' : 's'}${names ? ` — ${esc(names)}` : ''}</div>
+        </div>
+        <button class="btn btn-amber btn-sm" data-rt-apply="${t.id}">Apply to this report</button>
+        <button class="btn btn-navy btn-sm" data-rt-edit="${t.id}">Edit</button>
+        <button class="btn btn-danger-ghost btn-sm" data-rt-del="${t.id}">Delete</button>
+      </div>`;
+      })
+      .join('');
+  }
+  wrap.querySelectorAll('[data-rt-apply]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      if (!state.current) return;
+      const id = Number(btn.dataset.rtApply);
+      try {
+        const data = await api(`/api/reports/${state.current.report.id}/apply-template`, {
+          method: 'POST',
+          body: JSON.stringify({ templateId: id }),
+        });
+        const a = data.applied || { added: 0, skipped: 0, templateName: '' };
+        state.current = data;
+        renderEditor();
+        rtMsg(
+          `Template “${a.templateName}” applied: ${a.added} field${a.added === 1 ? '' : 's'} added` +
+            (a.skipped ? `, ${a.skipped} skipped (already on this report)` : '') +
+            '. Fill in the values under Custom fields.'
+        );
+      } catch (err) {
+        rtMsg(err.message);
+      }
+    });
+  });
+  wrap.querySelectorAll('[data-rt-edit]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const t = state.reportTemplates.find((x) => x.id === Number(btn.dataset.rtEdit));
+      if (!t) return;
+      rtDraft = {
+        id: t.id,
+        name: t.name,
+        fields: (t.fields || []).map((f) => ({ name: f.name, value: f.value })),
+      };
+      renderReportTemplateEditor();
+    });
+  });
+  wrap.querySelectorAll('[data-rt-del]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const t = state.reportTemplates.find((x) => x.id === Number(btn.dataset.rtDel));
+      if (!t) return;
+      if (!window.confirm(`Delete the template “${t.name}”? Reports you already made keep their fields.`)) return;
+      await api(`/api/report-templates/${t.id}`, { method: 'DELETE' });
+      if (rtDraft && rtDraft.id === t.id) {
+        rtDraft = null;
+        renderReportTemplateEditor();
+      }
+      await loadReportTemplates();
+      rtMsg(`Template “${t.name}” deleted.`);
+    });
+  });
+  renderStartTemplateSelect();
+}
+
+function renderReportTemplateEditor() {
+  const box = $('#reportTemplateEditor');
+  if (!box) return;
+  if (!rtDraft) {
+    box.classList.add('hidden');
+    box.innerHTML = '';
+    return;
+  }
+  box.classList.remove('hidden');
+  const rows = rtDraft.fields
+    .map(
+      (f, i) => `
+      <div class="cf-row" data-rt-field="${i}">
+        <input class="cf-name rt-f-name" value="${esc(f.name)}" placeholder="Field name (e.g. Gate code)" />
+        <input class="cf-value rt-f-value" value="${esc(f.value)}" placeholder="Default value (optional)" />
+        <button class="btn btn-danger-ghost btn-sm" data-rt-field-del="${i}">Delete</button>
+      </div>`
+    )
+    .join('');
+  box.innerHTML = `
+    <h4 class="rt-editor-title">${rtDraft.id ? 'Edit template' : 'New template'}</h4>
+    <label class="field"><span>Template name</span>
+      <input type="text" id="rtDraftName" value="${esc(rtDraft.name)}" placeholder="e.g. Condo inspection" />
+    </label>
+    <div id="rtDraftFields">${rows || '<p class="muted small">No fields yet — add the custom fields this template should include.</p>'}</div>
+    <div class="row-gap">
+      <button id="rtDraftAddField" class="btn btn-navy btn-sm">+ Add field</button>
+      <button id="rtDraftSave" class="btn btn-amber btn-sm">Save template</button>
+      <button id="rtDraftCancel" class="btn btn-ghost btn-sm">Cancel</button>
+    </div>`;
+  const syncDraft = () => {
+    rtDraft.name = $('#rtDraftName').value;
+    box.querySelectorAll('[data-rt-field]').forEach((row) => {
+      const i = Number(row.dataset.rtField);
+      rtDraft.fields[i] = {
+        name: row.querySelector('.rt-f-name').value,
+        value: row.querySelector('.rt-f-value').value,
+      };
+    });
+  };
+  box.querySelectorAll('[data-rt-field-del]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      syncDraft();
+      rtDraft.fields.splice(Number(btn.dataset.rtFieldDel), 1);
+      renderReportTemplateEditor();
+    });
+  });
+  $('#rtDraftAddField').addEventListener('click', () => {
+    syncDraft();
+    rtDraft.fields.push({ name: '', value: '' });
+    renderReportTemplateEditor();
+    const inputs = box.querySelectorAll('.rt-f-name');
+    const last = inputs[inputs.length - 1];
+    if (last) last.focus();
+  });
+  $('#rtDraftCancel').addEventListener('click', () => {
+    rtDraft = null;
+    renderReportTemplateEditor();
+  });
+  $('#rtDraftSave').addEventListener('click', async () => {
+    syncDraft();
+    const name = rtDraft.name.trim();
+    if (!name) {
+      rtMsg('Give the template a name first.');
+      return;
+    }
+    const fields = rtDraft.fields.filter((f) => f.name.trim());
+    try {
+      if (rtDraft.id) {
+        await api(`/api/report-templates/${rtDraft.id}`, {
+          method: 'PUT',
+          body: JSON.stringify({ name, fields }),
+        });
+        rtMsg(`Template “${name}” updated (${fields.length} fields).`);
+      } else {
+        await api('/api/report-templates', {
+          method: 'POST',
+          body: JSON.stringify({ name, fields }),
+        });
+        rtMsg(`Template “${name}” saved (${fields.length} fields). Apply it to any report, or start a new report from it.`);
+      }
+      rtDraft = null;
+      renderReportTemplateEditor();
+      await loadReportTemplates();
+    } catch (err) {
+      rtMsg(err.message);
+    }
+  });
+}
+
+$('#rtCreateBtn').addEventListener('click', () => {
+  const name = $('#rtNewName').value.trim();
+  if (!name) {
+    rtMsg('Type a template name first, then Create template.');
+    $('#rtNewName').focus();
+    return;
+  }
+  rtDraft = { id: null, name, fields: [{ name: '', value: '' }] };
+  $('#rtNewName').value = '';
+  renderReportTemplateEditor();
+  rtMsg('Add the fields for this template, then Save template.');
+});
+
+$('#rtSaveCurrentBtn').addEventListener('click', async () => {
+  if (!state.current) return;
+  const name = $('#rtSaveCurrentName').value.trim();
+  if (!name) {
+    rtMsg('Name the template first (e.g. Condo inspection).');
+    $('#rtSaveCurrentName').focus();
+    return;
+  }
+  const fields = (state.current.customFields || [])
+    .filter((f) => (f.name || '').trim())
+    .map((f) => ({ name: f.name, value: f.value }));
+  if (!fields.length) {
+    rtMsg('This report has no named custom fields yet — add some under Custom fields first.');
+    return;
+  }
+  try {
+    await api('/api/report-templates', {
+      method: 'POST',
+      body: JSON.stringify({ name, fields }),
+    });
+    $('#rtSaveCurrentName').value = '';
+    await loadReportTemplates();
+    rtMsg(`Template “${name}” saved from this report (${fields.length} fields).`);
+  } catch (err) {
+    rtMsg(err.message);
+  }
 });
 
 /* --- Photos --- */
