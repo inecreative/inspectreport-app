@@ -96,6 +96,27 @@ const SCHEMA = [
      name TEXT NOT NULL DEFAULT '',
      value TEXT NOT NULL DEFAULT ''
    )`,
+  /* Report templates: a named SET of custom fields a user saves once and
+     applies to any report in one tap (e.g. "Condo inspection", "Rental
+     property"). This is separate from field_templates above, which saves
+     ONE field at a time. A template's field values are defaults — when
+     the template is applied they are copied into the report's own
+     custom_fields rows, which the user then edits per report; later
+     edits to the template never change reports already created. */
+  `CREATE TABLE IF NOT EXISTS report_templates (
+     id SERIAL PRIMARY KEY,
+     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+     name TEXT NOT NULL DEFAULT '',
+     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+   )`,
+  `CREATE TABLE IF NOT EXISTS report_template_fields (
+     id SERIAL PRIMARY KEY,
+     template_id INTEGER NOT NULL REFERENCES report_templates(id) ON DELETE CASCADE,
+     name TEXT NOT NULL DEFAULT '',
+     value TEXT NOT NULL DEFAULT '',
+     sort_order INTEGER NOT NULL DEFAULT 0
+   )`,
   `CREATE TABLE IF NOT EXISTS findings (
      id SERIAL PRIMARY KEY,
      report_id INTEGER NOT NULL REFERENCES reports(id) ON DELETE CASCADE,
