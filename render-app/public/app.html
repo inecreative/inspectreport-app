@@ -160,6 +160,38 @@
 
       <div class="card">
         <h2>Findings</h2>
+        <label class="btn btn-navy btn-big btn-block voice-btn">
+          📸 + 🎙️ Voice Finding
+          <input type="file" id="voicePhotoInput" accept="image/*" capture="environment" hidden />
+        </label>
+        <p class="muted small">On site? Snap a photo, say the note out loud — AI builds the finding with that photo attached.</p>
+        <div id="voiceCard" class="voice-card hidden">
+          <div class="voice-top">
+            <img id="voiceThumb" class="voice-thumb" alt="Captured photo" />
+            <div class="voice-head-text">
+              <div class="voice-title">Voice note for this photo</div>
+              <p class="muted small">Tap the mic, talk for up to a minute, then check the text — fix any word it misheard before generating.</p>
+            </div>
+            <button id="voiceCancelBtn" type="button" class="btn btn-ghost btn-sm">Cancel</button>
+          </div>
+          <div class="voice-microw">
+            <button id="voiceMicBtn" type="button" class="mic-btn" aria-label="Record voice note">🎙️</button>
+            <div>
+              <div id="voiceTimer" class="voice-timer">0:00 / 1:00</div>
+              <div id="voiceState" class="muted small">Ready when you are</div>
+            </div>
+          </div>
+          <label class="field">
+            <span>Your note — words the mic heard (edit freely)</span>
+            <textarea id="voiceTranscript" rows="3" placeholder="e.g. Active leak under kitchen sink P-trap, cabinet base is wet, mark as urgent"></textarea>
+          </label>
+          <div class="row-gap">
+            <button id="voiceGenerateBtn" type="button" class="btn btn-amber">✨ Generate Finding</button>
+            <button id="voiceQueueBtn" type="button" class="btn btn-white btn-sm">＋ Queue it &amp; snap another</button>
+          </div>
+          <p id="voiceMsg" class="muted small" aria-live="polite"></p>
+        </div>
+        <p id="voiceQueueStatus" class="muted small" aria-live="polite"></p>
         <label class="field">
           <span>Field notes — write it rough, AI structures it</span>
           <textarea id="notesBox" rows="4" placeholder="e.g. kitchen sink leak active, cabinet water damage. roof shingles cracked north side. furnace filter dirty."></textarea>
