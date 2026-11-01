@@ -72,6 +72,9 @@
         <h1>Your reports</h1>
         <div class="row-gap">
           <button id="sampleBtn" class="btn btn-navy">Load sample job</button>
+          <label class="field-inline"><span>Start from:</span>
+            <select id="startTemplateSelect"><option value="">Blank report</option></select>
+          </label>
           <button id="newReportBtn" class="btn btn-amber">+ New report</button>
         </div>
       </div>
@@ -113,12 +116,26 @@
             <input type="tel" id="f_client_phone" placeholder="(512) 555-0147" /></label>
         </div>
 
+        <h3 class="subhead">Report templates</h3>
+        <p class="muted small">A template is a set of custom fields you save once and apply to any report in one tap. Applying copies the fields into this report — fill in the values for this job. Editing a template later never changes reports you already made.</p>
+        <div id="reportTemplateList"></div>
+        <div id="reportTemplateEditor" class="rt-editor hidden"></div>
+        <div class="row-gap">
+          <input type="text" id="rtNewName" class="inline-input" placeholder="New template name (e.g. Condo inspection)" />
+          <button id="rtCreateBtn" class="btn btn-navy btn-sm">+ Create template</button>
+        </div>
+        <div class="row-gap rt-save-current">
+          <input type="text" id="rtSaveCurrentName" class="inline-input" placeholder="Name for this report's field set…" />
+          <button id="rtSaveCurrentBtn" class="btn btn-navy btn-sm">Save current fields as template</button>
+        </div>
+        <p id="rtMsg" class="muted small" aria-live="polite"></p>
+
         <h3 class="subhead">Custom fields</h3>
         <div id="customFieldList"></div>
         <button id="addFieldBtn" class="btn btn-navy btn-sm">+ Add custom field</button>
 
-        <h3 class="subhead">Saved custom fields</h3>
-        <p class="muted small">Fields you save once can be re-added to any report.</p>
+        <h3 class="subhead">Saved single fields</h3>
+        <p class="muted small">Single fields you save once can be re-added to any report, one at a time.</p>
         <div id="templateList"></div>
         <div class="row-gap">
           <input type="text" id="tplName" class="inline-input" placeholder="Field name (e.g. Gate code)" />
