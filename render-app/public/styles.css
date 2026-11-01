@@ -314,29 +314,6 @@ h1 { font-family: Archivo, sans-serif; font-size: 28px; font-weight: 800; letter
 .cf-row input.cf-value, .tpl-row input.tpl-value { flex: 2 1 220px; width: auto; }
 
 
-/* ---------- Voice-to-Finding ---------- */
-.voice-btn { min-height: 56px; font-size: 17px; margin-bottom: 6px; cursor: pointer; }
-.voice-card { border: 1.5px solid var(--amber); border-radius: 10px; padding: 14px; margin: 12px 0; background: var(--surface); }
-.voice-top { display: flex; gap: 12px; align-items: flex-start; }
-.voice-thumb { width: 96px; height: 72px; object-fit: cover; border-radius: 8px; border: 1.5px solid var(--line); flex: none; background: var(--surface2); }
-.voice-head-text { flex: 1 1 auto; min-width: 0; }
-.voice-title { font-family: Archivo, sans-serif; font-weight: 800; font-size: 16px; }
-.voice-microw { display: flex; gap: 14px; align-items: center; margin: 12px 0; }
-.mic-btn {
-  width: 64px; height: 64px; border-radius: 50%; flex: none;
-  border: 1.5px solid var(--line); background: white; font-size: 28px; cursor: pointer;
-}
-.mic-btn.recording { background: var(--red-bg); border-color: var(--red); animation: micpulse 1.2s ease-out infinite; }
-@keyframes micpulse {
-  0% { box-shadow: 0 0 0 0 rgba(185, 28, 28, .35); }
-  70% { box-shadow: 0 0 0 14px rgba(185, 28, 28, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(185, 28, 28, 0); }
-}
-.voice-timer { font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 16px; }
-.raw-note { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
-.raw-note .raw-note-label { font-size: 13px; font-weight: 700; color: var(--muted); }
-.raw-note input.f-raw-note { flex: 1 1 220px; width: auto; }
-
 /* ---------- Photos ---------- */
 .photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-top: 14px; }
 .photo-cell { border: 1.5px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--surface); }
