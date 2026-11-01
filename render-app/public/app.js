@@ -674,7 +674,7 @@ function renderCustomFields() {
       <div class="cf-row" data-field="${f.id}">
         <input class="cf-name" value="${esc(f.name)}" placeholder="Field name" />
         <input class="cf-value" value="${esc(f.value)}" placeholder="Value" />
-        <button class="btn btn-white btn-sm" data-save-template="${f.id}">Save Custom Field</button>
+        <button class="btn btn-white btn-sm" data-save-template="${f.id}">+ Add</button>
         <button class="btn btn-danger-ghost btn-sm" data-del-field="${f.id}">Delete</button>
       </div>`
     )
