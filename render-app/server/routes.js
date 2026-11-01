@@ -767,13 +767,31 @@ router.post(
   wrap(async (req, res) => {
     const report = await ownReport(req.user.id, req.params.id);
     if (!report) return res.status(404).json({ error: 'Report not found.' });
-    const { rows: maxRows } = await db.query(
-      'SELECT COALESCE(MAX(sort_order), -1) AS m FROM custom_fields WHERE report_id = $1',
-      [report.id]
-    );
+    let sortOrder;
+    const afterId = req.body.afterId ? Number(req.body.afterId) : null;
+    if (afterId) {
+      const { rows: arows } = await db.query(
+        'SELECT sort_order FROM custom_fields WHERE id = $1 AND report_id = $2',
+        [afterId, report.id]
+      );
+      if (arows.length) {
+        sortOrder = arows[0].sort_order + 1;
+        await db.query(
+          'UPDATE custom_fields SET sort_order = sort_order + 1 WHERE report_id = $1 AND sort_order >= $2',
+          [report.id, sortOrder]
+        );
+      }
+    }
+    if (sortOrder === undefined) {
+      const { rows: maxRows } = await db.query(
+        'SELECT COALESCE(MAX(sort_order), -1) AS m FROM custom_fields WHERE report_id = $1',
+        [report.id]
+      );
+      sortOrder = maxRows[0].m + 1;
+    }
     const { rows } = await db.query(
       'INSERT INTO custom_fields (report_id, name, value, sort_order) VALUES ($1, $2, $3, $4) RETURNING id',
-      [report.id, String(req.body.name || ''), String(req.body.value || ''), maxRows[0].m + 1]
+      [report.id, String(req.body.name || ''), String(req.body.value || ''), sortOrder]
     );
     await touchReport(report.id);
     return res.status(201).json({ field: await byId('custom_fields', rows[0].id) });
@@ -820,48 +838,103 @@ router.delete(
 );
 
 router.get(
-  '/templates',
+  '/report-templates',
   auth.requireAuth,
   wrap(async (req, res) => {
-    const { rows } = await db.query(
-      'SELECT * FROM field_templates WHERE user_id = $1 ORDER BY id',
+    const { rows: templates } = await db.query(
+      'SELECT * FROM report_templates WHERE user_id = $1 ORDER BY id',
       [req.user.id]
     );
-    res.json({ templates: rows });
+    const out = [];
+    for (const t of templates) {
+      const { rows: fields } = await db.query(
+        'SELECT * FROM report_template_fields WHERE template_id = $1 ORDER BY sort_order, id',
+        [t.id]
+      );
+      out.push({ ...t, fields, fieldCount: fields.length });
+    }
+    return res.json({ templates: out });
+  })
+);
+
+/* Save a report's current custom fields as a named template. Name only —
+   the fields are copied from the report, nothing else to fill in. */
+router.post(
+  '/report-templates',
+  auth.requireAuth,
+  wrap(async (req, res) => {
+    const name = String(req.body.name || '').trim();
+    if (!name) return res.status(400).json({ error: 'Give the template a name.' });
+    const report = await ownReport(req.user.id, req.body.reportId);
+    if (!report) return res.status(404).json({ error: 'Report not found.' });
+    const { rows: fields } = await db.query(
+      'SELECT * FROM custom_fields WHERE report_id = $1 ORDER BY sort_order, id',
+      [report.id]
+    );
+    if (!fields.length) {
+      return res.status(400).json({ error: 'Add at least one custom field first.' });
+    }
+    const { rows } = await db.query(
+      'INSERT INTO report_templates (user_id, name) VALUES ($1, $2) RETURNING id',
+      [req.user.id, name]
+    );
+    const templateId = rows[0].id;
+    for (let i = 0; i < fields.length; i += 1) {
+      await db.query(
+        'INSERT INTO report_template_fields (template_id, name, value, sort_order) VALUES ($1, $2, $3, $4)',
+        [templateId, fields[i].name, fields[i].value, i]
+      );
+    }
+    return res.status(201).json({ template: { id: templateId, name, fieldCount: fields.length } });
   })
 );
 
 router.post(
-  '/templates',
+  '/reports/:id/apply-template',
   auth.requireAuth,
   wrap(async (req, res) => {
-    const { rows } = await db.query(
-      'INSERT INTO field_templates (user_id, name, value) VALUES ($1, $2, $3) RETURNING id',
-      [req.user.id, String(req.body.name || ''), String(req.body.value || '')]
+    const report = await ownReport(req.user.id, req.params.id);
+    if (!report) return res.status(404).json({ error: 'Report not found.' });
+    const { rows: trows } = await db.query(
+      'SELECT * FROM report_templates WHERE id = $1 AND user_id = $2',
+      [Number(req.body.templateId), req.user.id]
     );
-    res.status(201).json({ template: await byId('field_templates', rows[0].id) });
-  })
-);
-
-router.put(
-  '/templates/:id',
-  auth.requireAuth,
-  wrap(async (req, res) => {
-    const { rowCount } = await db.query(
-      'UPDATE field_templates SET name = $1, value = $2 WHERE id = $3 AND user_id = $4',
-      [String(req.body.name || ''), String(req.body.value || ''), req.params.id, req.user.id]
+    if (!trows.length) return res.status(404).json({ error: 'Template not found.' });
+    const { rows: tfields } = await db.query(
+      'SELECT * FROM report_template_fields WHERE template_id = $1 ORDER BY sort_order, id',
+      [trows[0].id]
     );
-    if (!rowCount) return res.status(404).json({ error: 'Template not found.' });
-    return res.json({ template: await byId('field_templates', Number(req.params.id)) });
+    const { rows: existing } = await db.query(
+      'SELECT name FROM custom_fields WHERE report_id = $1',
+      [report.id]
+    );
+    const have = new Set(existing.map((f) => f.name.trim().toLowerCase()));
+    const { rows: maxRows } = await db.query(
+      'SELECT COALESCE(MAX(sort_order), -1) AS m FROM custom_fields WHERE report_id = $1',
+      [report.id]
+    );
+    let sort = maxRows[0].m + 1;
+    let added = 0;
+    for (const f of tfields) {
+      if (have.has(f.name.trim().toLowerCase())) continue;
+      await db.query(
+        'INSERT INTO custom_fields (report_id, name, value, sort_order) VALUES ($1, $2, $3, $4)',
+        [report.id, f.name, f.value, sort]
+      );
+      sort += 1;
+      added += 1;
+    }
+    if (added) await touchReport(report.id);
+    return res.json({ ok: true, added });
   })
 );
 
 router.delete(
-  '/templates/:id',
+  '/report-templates/:id',
   auth.requireAuth,
   wrap(async (req, res) => {
     const { rowCount } = await db.query(
-      'DELETE FROM field_templates WHERE id = $1 AND user_id = $2',
+      'DELETE FROM report_templates WHERE id = $1 AND user_id = $2',
       [req.params.id, req.user.id]
     );
     if (!rowCount) return res.status(404).json({ error: 'Template not found.' });
