@@ -235,6 +235,7 @@ $('#logoutBtn').addEventListener('click', async () => {
   state.current = null;
   state.profile = null;
   $('#profileView').classList.add('hidden');
+  $('#templatesView').classList.add('hidden');
   $('#editorView').classList.add('hidden');
   $('#listView').classList.remove('hidden');
   showAuth();
@@ -496,6 +497,7 @@ async function loadProfile() {
 function showProfile() {
   $('#listView').classList.add('hidden');
   $('#editorView').classList.add('hidden');
+  $('#templatesView').classList.add('hidden');
   $('#profileView').classList.remove('hidden');
   loadProfile();
   loadPriceBook();
@@ -506,6 +508,32 @@ $('#profileBtn').addEventListener('click', showProfile);
 
 $('#profileBackBtn').addEventListener('click', async () => {
   $('#profileView').classList.add('hidden');
+  if (state.current) {
+    $('#editorView').classList.remove('hidden');
+  } else {
+    $('#listView').classList.remove('hidden');
+    await loadReports();
+  }
+  updatePdfButton();
+});
+
+/* --- Templates page (create + manage templates live here, not in
+       the editors — the editors only apply them) --- */
+function showTemplates() {
+  $('#listView').classList.add('hidden');
+  $('#editorView').classList.add('hidden');
+  $('#profileView').classList.add('hidden');
+  $('#templatesView').classList.remove('hidden');
+  closeRtEditor();
+  closeEtEditor();
+  loadTemplates();
+  loadEstTemplates();
+}
+
+$('#templatesBtn').addEventListener('click', showTemplates);
+
+$('#templatesBackBtn').addEventListener('click', async () => {
+  $('#templatesView').classList.add('hidden');
   if (state.current) {
     $('#editorView').classList.remove('hidden');
   } else {
@@ -706,11 +734,12 @@ async function openReport(id) {
 function showEditor() {
   $('#listView').classList.add('hidden');
   $('#profileView').classList.add('hidden');
+  $('#templatesView').classList.add('hidden');
   $('#editorView').classList.remove('hidden');
   updatePdfButton();
   const r = state.current.report;
   resetSaveStatus();
-  $('#f_doc_type').value = ['job', 'estimate'].includes(r.doc_type) ? r.doc_type : 'inspection';
+  paintDocTypeButtons(['job', 'estimate'].includes(r.doc_type) ? r.doc_type : 'inspection');
   updateDocTypeLabels();
   $('#f_address').value = r.address || '';
   $('#f_client_name').value = r.client_name || '';
@@ -737,6 +766,7 @@ $('#backBtn').addEventListener('click', async () => {
   state.current = null;
   $('#editorView').classList.add('hidden');
   $('#profileView').classList.add('hidden');
+  $('#templatesView').classList.add('hidden');
   $('#listView').classList.remove('hidden');
   updatePdfButton();
   await loadReports();
@@ -749,6 +779,7 @@ $('#deleteReportBtn').addEventListener('click', async () => {
   state.current = null;
   $('#editorView').classList.add('hidden');
   $('#profileView').classList.add('hidden');
+  $('#templatesView').classList.add('hidden');
   $('#listView').classList.remove('hidden');
   updatePdfButton();
   await loadReports();
@@ -770,12 +801,26 @@ function renderEditor() {
   renderPreview();
 }
 
-/* --- Document type (per report): Inspection Report vs Job Report ---
-   Job Report is the trades-facing document: same layout, but the badge,
-   the preparer label and the signature line drop the inspector wording.
-   The preview and the PDF read the same doc_type, so they never drift. */
+/* --- Document type (per report): Inspection Report vs Job Report vs
+   Estimate — picked with the big buttons above the form. Job Report is
+   the trades-facing document: same layout, but the badge, the preparer
+   label and the signature line drop the inspector wording. The preview
+   and the PDF read the same doc_type, so they never drift. */
+function currentDocType() {
+  const active = document.querySelector('.doctype-btn.is-active');
+  return active ? active.dataset.doctype : 'inspection';
+}
+
+function paintDocTypeButtons(type) {
+  document.querySelectorAll('.doctype-btn').forEach((btn) => {
+    const on = btn.dataset.doctype === type;
+    btn.classList.toggle('is-active', on);
+    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+  });
+}
+
 function updateDocTypeLabels() {
-  const type = $('#f_doc_type').value;
+  const type = currentDocType();
   const isJob = type === 'job';
   const isEstimate = type === 'estimate';
   $('#f_inspector_name_label').textContent = isJob || isEstimate ? 'Prepared by' : 'Inspector name';
@@ -795,14 +840,19 @@ function updateDocTypeLabels() {
   $('#estimateCard').classList.toggle('hidden', !isEstimate);
 }
 
-$('#f_doc_type').addEventListener('change', async () => {
-  updateDocTypeLabels();
-  if (!state.current) return;
-  state.current = await api(`/api/reports/${state.current.report.id}`, {
-    method: 'PUT',
-    body: JSON.stringify({ doc_type: $('#f_doc_type').value }),
+document.querySelectorAll('.doctype-btn').forEach((btn) => {
+  btn.addEventListener('click', async () => {
+    const type = btn.dataset.doctype;
+    paintDocTypeButtons(type);
+    updateDocTypeLabels();
+    if (!state.current) return;
+    if (state.current.report.doc_type === type) return;
+    state.current = await api(`/api/reports/${state.current.report.id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ doc_type: type }),
+    });
+    renderEditor();
   });
-  renderEditor();
 });
 
 /* --- Property & client main fields: save on change --- */
@@ -922,7 +972,8 @@ $('#addFieldBtn').addEventListener('click', async () => {
   await refreshCurrent();
 });
 
-/* --- Report templates (simple: name only) --- */
+/* --- Report templates: created/managed on the Templates page; the
+       report editor only applies one (select + Apply). --- */
 async function loadTemplates() {
   const { templates } = await api('/api/report-templates');
   state.templates = templates;
@@ -930,58 +981,166 @@ async function loadTemplates() {
 }
 
 function renderTemplates() {
-  const wrap = $('#reportTemplateList');
-  if (!wrap) return;
-  if (!state.templates.length) {
-    wrap.innerHTML = '';
+  // Editor: compact apply control (select of names + Apply button).
+  const sel = $('#rtApplySelect');
+  if (sel) {
+    const cur = sel.value;
+    sel.innerHTML =
+      '<option value="">Choose a template…</option>' +
+      state.templates
+        .map(
+          (t) =>
+            `<option value="${t.id}">${esc(t.name)} (${t.fieldCount} field${t.fieldCount === 1 ? '' : 's'})</option>`
+        )
+        .join('');
+    if (state.templates.some((t) => String(t.id) === cur)) sel.value = cur;
+  }
+  renderRtPageList();
+}
+
+$('#applyTemplateBtn').addEventListener('click', async () => {
+  if (!state.current) return;
+  const templateId = Number($('#rtApplySelect').value);
+  if (!templateId) {
+    $('#rtApplySelect').focus();
     return;
   }
-  wrap.innerHTML = state.templates
-    .map(
-      (t) => `
+  await api(`/api/reports/${state.current.report.id}/apply-template`, {
+    method: 'POST',
+    body: JSON.stringify({ templateId }),
+  });
+  await refreshCurrent();
+});
+
+/* Templates page — report template list + from-scratch editor. */
+let rtEditId = null;
+
+function renderRtPageList() {
+  const wrap = $('#rtPageList');
+  if (!wrap) return;
+  wrap.innerHTML = state.templates.length
+    ? state.templates
+        .map(
+          (t) => `
       <div class="tpl-row">
         <span class="tpl-title">${esc(t.name)}</span>
         <span class="muted small">${t.fieldCount} field${t.fieldCount === 1 ? '' : 's'}</span>
-        <button class="btn btn-white btn-sm" data-apply-template="${t.id}">+ Add</button>
-        <button class="btn btn-danger-ghost btn-sm" data-del-template="${t.id}">Delete</button>
+        <button class="btn btn-white btn-sm" data-edit-rt="${t.id}">Edit</button>
+        <button class="btn btn-danger-ghost btn-sm" data-del-rt="${t.id}">Delete</button>
       </div>`
-    )
-    .join('');
-  wrap.querySelectorAll('[data-apply-template]').forEach((btn) => {
-    btn.addEventListener('click', async () => {
-      if (!state.current) return;
-      await api(`/api/reports/${state.current.report.id}/apply-template`, {
-        method: 'POST',
-        body: JSON.stringify({ templateId: Number(btn.dataset.applyTemplate) }),
-      });
-      await refreshCurrent();
+        )
+        .join('')
+    : '<p class="muted small">No report templates yet — create your first one below.</p>';
+  wrap.querySelectorAll('[data-edit-rt]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const tpl = state.templates.find((t) => t.id === Number(btn.dataset.editRt));
+      if (tpl) openRtEditor(tpl);
     });
   });
-  wrap.querySelectorAll('[data-del-template]').forEach((btn) => {
+  wrap.querySelectorAll('[data-del-rt]').forEach((btn) => {
     btn.addEventListener('click', async () => {
-      await api(`/api/report-templates/${btn.dataset.delTemplate}`, { method: 'DELETE' });
+      await api(`/api/report-templates/${btn.dataset.delRt}`, { method: 'DELETE' });
+      if (rtEditId === Number(btn.dataset.delRt)) closeRtEditor();
       await loadTemplates();
     });
   });
 }
 
-$('#saveAsTemplateBtn').addEventListener('click', async () => {
-  if (!state.current) return;
-  const input = $('#rtName');
-  const name = input.value.trim();
+function renderRtEditRows(fields) {
+  const wrap = $('#rtEditFields');
+  wrap.innerHTML = fields
+    .map(
+      (f) => `
+      <div class="cf-row">
+        <input class="cf-name" value="${esc(f.name)}" placeholder="Field name — e.g. Unit #" />
+        <input class="cf-value" value="${esc(f.value)}" placeholder="Value (can be left blank)" />
+        <button type="button" class="btn btn-white btn-sm" data-rt-add-below>+ Add</button>
+        <button type="button" class="btn btn-danger-ghost btn-sm" data-rt-del-row>Delete</button>
+      </div>`
+    )
+    .join('');
+  wrap.querySelectorAll('[data-rt-add-below]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const rows = collectRtFields();
+      const idx = [...wrap.querySelectorAll('.cf-row')].indexOf(btn.closest('.cf-row'));
+      rows.splice(idx + 1, 0, { name: '', value: '' });
+      renderRtEditRows(rows);
+      const input = wrap.querySelectorAll('.cf-row')[idx + 1]?.querySelector('.cf-name');
+      if (input) input.focus();
+    });
+  });
+  wrap.querySelectorAll('[data-rt-del-row]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const rows = collectRtFields();
+      const idx = [...wrap.querySelectorAll('.cf-row')].indexOf(btn.closest('.cf-row'));
+      rows.splice(idx, 1);
+      renderRtEditRows(rows);
+    });
+  });
+}
+
+function collectRtFields() {
+  return [...document.querySelectorAll('#rtEditFields .cf-row')].map((row) => ({
+    name: row.querySelector('.cf-name').value,
+    value: row.querySelector('.cf-value').value,
+  }));
+}
+
+function openRtEditor(tpl) {
+  rtEditId = tpl ? tpl.id : null;
+  $('#rtEditorTitle').textContent = tpl ? `Edit template — ${tpl.name}` : 'New report template';
+  $('#rtEditName').value = tpl ? tpl.name : '';
+  $('#rtEditMsg').textContent = '';
+  renderRtEditRows(tpl ? tpl.fields.map((f) => ({ name: f.name, value: f.value })) : [{ name: '', value: '' }]);
+  $('#rtEditor').classList.remove('hidden');
+  $('#rtEditName').focus();
+}
+
+function closeRtEditor() {
+  rtEditId = null;
+  const ed = $('#rtEditor');
+  if (ed) ed.classList.add('hidden');
+}
+
+$('#rtNewBtn').addEventListener('click', () => openRtEditor(null));
+$('#rtAddRowBtn').addEventListener('click', () => {
+  const rows = collectRtFields();
+  rows.push({ name: '', value: '' });
+  renderRtEditRows(rows);
+  const list = document.querySelectorAll('#rtEditFields .cf-row');
+  const input = list[list.length - 1]?.querySelector('.cf-name');
+  if (input) input.focus();
+});
+$('#rtEditCancelBtn').addEventListener('click', closeRtEditor);
+$('#rtEditSaveBtn').addEventListener('click', async () => {
+  const msg = $('#rtEditMsg');
+  const name = $('#rtEditName').value.trim();
   if (!name) {
-    input.focus();
+    $('#rtEditName').focus();
     return;
   }
+  const fields = collectRtFields();
+  if (!fields.length) {
+    msg.textContent = 'Add at least one field first.';
+    return;
+  }
+  msg.textContent = 'Saving…';
   try {
-    await api('/api/report-templates', {
-      method: 'POST',
-      body: JSON.stringify({ name, reportId: state.current.report.id }),
-    });
-    input.value = '';
+    if (rtEditId) {
+      await api(`/api/report-templates/${rtEditId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ name, fields }),
+      });
+    } else {
+      await api('/api/report-templates', {
+        method: 'POST',
+        body: JSON.stringify({ name, fields }),
+      });
+    }
+    closeRtEditor();
     await loadTemplates();
   } catch (err) {
-    window.alert(err.message);
+    msg.textContent = err.message;
   }
 });
 
@@ -1586,7 +1745,8 @@ $('#addSectionBtn').addEventListener('click', async () => {
   }
 });
 
-/* --- Estimate templates (name only — same shape as report templates) --- */
+/* --- Estimate templates: created/managed on the Templates page; the
+       estimate editor only applies one (select + Apply). --- */
 async function loadEstTemplates() {
   try {
     const { templates } = await api('/api/estimate-templates');
@@ -1598,58 +1758,203 @@ async function loadEstTemplates() {
 }
 
 function renderEstTemplates() {
-  const wrap = $('#estimateTemplateList');
-  if (!wrap) return;
-  if (!state.estTemplates.length) {
-    wrap.innerHTML = '';
+  // Editor: compact apply control (select of names + Apply button).
+  const sel = $('#etApplySelect');
+  if (sel) {
+    const cur = sel.value;
+    sel.innerHTML =
+      '<option value="">Choose a template…</option>' +
+      state.estTemplates
+        .map(
+          (t) =>
+            `<option value="${t.id}">${esc(t.name)} (${t.itemCount} item${t.itemCount === 1 ? '' : 's'})</option>`
+        )
+        .join('');
+    if (state.estTemplates.some((t) => String(t.id) === cur)) sel.value = cur;
+  }
+  renderEtPageList();
+}
+
+$('#applyEstTemplateBtn').addEventListener('click', async () => {
+  if (!state.current) return;
+  const templateId = Number($('#etApplySelect').value);
+  if (!templateId) {
+    $('#etApplySelect').focus();
     return;
   }
-  wrap.innerHTML = state.estTemplates
-    .map(
-      (t) => `
+  await api(`/api/reports/${state.current.report.id}/apply-estimate-template`, {
+    method: 'POST',
+    body: JSON.stringify({ templateId }),
+  });
+  await refreshCurrent();
+  // Apply may have filled the estimate's texts from the template —
+  // refreshCurrent re-renders items/preview but not these inputs.
+  const r = state.current.report;
+  $('#e_scope').value = r.scope_text || '';
+  $('#e_exclusions').value = r.exclusions_text || '';
+  $('#e_terms').value = r.terms_text || '';
+});
+
+/* Templates page — estimate template list + from-scratch editor. */
+let etEditId = null;
+
+function renderEtPageList() {
+  const wrap = $('#etPageList');
+  if (!wrap) return;
+  wrap.innerHTML = state.estTemplates.length
+    ? state.estTemplates
+        .map(
+          (t) => `
       <div class="tpl-row">
         <span class="tpl-title">${esc(t.name)}</span>
         <span class="muted small">${t.itemCount} item${t.itemCount === 1 ? '' : 's'}</span>
-        <button class="btn btn-white btn-sm" data-apply-est-template="${t.id}">+ Add</button>
-        <button class="btn btn-danger-ghost btn-sm" data-del-est-template="${t.id}">Delete</button>
+        <button class="btn btn-white btn-sm" data-edit-et="${t.id}">Edit</button>
+        <button class="btn btn-danger-ghost btn-sm" data-del-et="${t.id}">Delete</button>
       </div>`
-    )
-    .join('');
-  wrap.querySelectorAll('[data-apply-est-template]').forEach((btn) => {
-    btn.addEventListener('click', async () => {
-      if (!state.current) return;
-      await api(`/api/reports/${state.current.report.id}/apply-estimate-template`, {
-        method: 'POST',
-        body: JSON.stringify({ templateId: Number(btn.dataset.applyEstTemplate) }),
-      });
-      await refreshCurrent();
+        )
+        .join('')
+    : '<p class="muted small">No estimate templates yet — create your first one below.</p>';
+  wrap.querySelectorAll('[data-edit-et]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const tpl = state.estTemplates.find((t) => t.id === Number(btn.dataset.editEt));
+      if (tpl) openEtEditor(tpl);
     });
   });
-  wrap.querySelectorAll('[data-del-est-template]').forEach((btn) => {
+  wrap.querySelectorAll('[data-del-et]').forEach((btn) => {
     btn.addEventListener('click', async () => {
-      await api(`/api/estimate-templates/${btn.dataset.delEstTemplate}`, { method: 'DELETE' });
+      await api(`/api/estimate-templates/${btn.dataset.delEt}`, { method: 'DELETE' });
+      if (etEditId === Number(btn.dataset.delEt)) closeEtEditor();
       await loadEstTemplates();
     });
   });
 }
 
-$('#saveEstTemplateBtn').addEventListener('click', async () => {
-  if (!state.current) return;
-  const input = $('#etName');
-  const name = input.value.trim();
+const ET_BLANK_ITEM = { section: '', description: '', kind: 'item', qty: 1, unit: '', unit_price: 0, optional: false };
+
+function renderEtEditRows(items) {
+  const wrap = $('#etEditItems');
+  wrap.innerHTML = items
+    .map(
+      (it) => `
+      <div class="est-item">
+        <input class="eti-section" value="${esc(it.section)}" placeholder="Section — e.g. Plumbing" />
+        <input class="ei-desc" value="${esc(it.description)}" placeholder="Description — e.g. Replace leaking trap" />
+        <select class="ei-kind">
+          ${['item', 'labor', 'material'].map((k) => `<option value="${k}" ${k === it.kind ? 'selected' : ''}>${KIND_LABEL[k]}</option>`).join('')}
+        </select>
+        <input class="ei-qty" type="number" min="0" step="0.25" value="${Number(it.qty || 0)}" title="Quantity" />
+        <input class="ei-unit" value="${esc(it.unit)}" placeholder="unit" title="Unit (hr, ea, sq ft…)" />
+        <input class="ei-price" type="number" min="0" step="0.01" value="${Number(it.unit_price || 0)}" title="Unit price $" />
+        <label class="ei-opt"><input type="checkbox" class="ei-optional" ${it.optional ? 'checked' : ''} /> Optional</label>
+        <button type="button" class="btn btn-white btn-sm" data-et-add-below>+ Add</button>
+        <button type="button" class="btn btn-danger-ghost btn-sm" data-et-del-row>Delete</button>
+      </div>`
+    )
+    .join('');
+  const rows = () => [...wrap.querySelectorAll('.est-item')];
+  wrap.querySelectorAll('[data-et-add-below]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const itemsNow = collectEtItems();
+      const idx = rows().indexOf(btn.closest('.est-item'));
+      itemsNow.splice(idx + 1, 0, { ...ET_BLANK_ITEM });
+      renderEtEditRows(itemsNow);
+      const input = rows()[idx + 1]?.querySelector('.eti-section');
+      if (input) input.focus();
+    });
+  });
+  wrap.querySelectorAll('[data-et-del-row]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const itemsNow = collectEtItems();
+      const idx = rows().indexOf(btn.closest('.est-item'));
+      itemsNow.splice(idx, 1);
+      renderEtEditRows(itemsNow);
+    });
+  });
+}
+
+function collectEtItems() {
+  return [...document.querySelectorAll('#etEditItems .est-item')].map((row) => ({
+    section: row.querySelector('.eti-section').value,
+    description: row.querySelector('.ei-desc').value,
+    kind: row.querySelector('.ei-kind').value,
+    qty: Number(row.querySelector('.ei-qty').value) || 0,
+    unit: row.querySelector('.ei-unit').value,
+    unit_price: Number(row.querySelector('.ei-price').value) || 0,
+    optional: row.querySelector('.ei-optional').checked,
+  }));
+}
+
+function openEtEditor(tpl) {
+  etEditId = tpl ? tpl.id : null;
+  $('#etEditorTitle').textContent = tpl ? `Edit template — ${tpl.name}` : 'New estimate template';
+  $('#etEditName').value = tpl ? tpl.name : '';
+  $('#etEditScope').value = tpl ? tpl.scope_text || '' : '';
+  $('#etEditExclusions').value = tpl ? tpl.exclusions_text || '' : '';
+  $('#etEditTerms').value = tpl ? tpl.terms_text || '' : '';
+  $('#etEditMsg').textContent = '';
+  renderEtEditRows(
+    tpl
+      ? tpl.items.map((it) => ({
+          section: it.section,
+          description: it.description,
+          kind: it.kind,
+          qty: it.qty,
+          unit: it.unit,
+          unit_price: it.unit_price,
+          optional: it.optional,
+        }))
+      : [{ ...ET_BLANK_ITEM }]
+  );
+  $('#etEditor').classList.remove('hidden');
+  $('#etEditName').focus();
+}
+
+function closeEtEditor() {
+  etEditId = null;
+  const ed = $('#etEditor');
+  if (ed) ed.classList.add('hidden');
+}
+
+$('#etNewBtn').addEventListener('click', () => openEtEditor(null));
+$('#etAddRowBtn').addEventListener('click', () => {
+  const items = collectEtItems();
+  items.push({ ...ET_BLANK_ITEM });
+  renderEtEditRows(items);
+  const list = document.querySelectorAll('#etEditItems .est-item');
+  const input = list[list.length - 1]?.querySelector('.eti-section');
+  if (input) input.focus();
+});
+$('#etEditCancelBtn').addEventListener('click', closeEtEditor);
+$('#etEditSaveBtn').addEventListener('click', async () => {
+  const msg = $('#etEditMsg');
+  const name = $('#etEditName').value.trim();
   if (!name) {
-    input.focus();
+    $('#etEditName').focus();
     return;
   }
+  const items = collectEtItems();
+  if (!items.length) {
+    msg.textContent = 'Add at least one line item first.';
+    return;
+  }
+  msg.textContent = 'Saving…';
   try {
-    await api('/api/estimate-templates', {
-      method: 'POST',
-      body: JSON.stringify({ name, reportId: state.current.report.id }),
+    const body = JSON.stringify({
+      name,
+      items,
+      scopeText: $('#etEditScope').value,
+      exclusionsText: $('#etEditExclusions').value,
+      termsText: $('#etEditTerms').value,
     });
-    input.value = '';
+    if (etEditId) {
+      await api(`/api/estimate-templates/${etEditId}`, { method: 'PUT', body });
+    } else {
+      await api('/api/estimate-templates', { method: 'POST', body });
+    }
+    closeEtEditor();
     await loadEstTemplates();
   } catch (err) {
-    window.alert(err.message);
+    msg.textContent = err.message;
   }
 });
 
