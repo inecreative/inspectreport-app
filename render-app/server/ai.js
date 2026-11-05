@@ -12,6 +12,7 @@
  * to a built-in keyword-based implementation so the app still works:
  *   - structureNotes(notes)          -> findings[]
  *   - polishFinding(finding)         -> { title, detail }
+ *   - polishText(text, field)        -> polished string (estimate texts)
  *   - summarizeReport(report, list)  -> summary string
  */
 
@@ -210,6 +211,34 @@ async function polishFinding(finding) {
   return fallbackPolish(finding);
 }
 
+const ESTIMATE_TEXT_LABELS = {
+  scope_text: 'scope of work',
+  exclusions_text: 'exclusions (what is NOT included)',
+  terms_text: 'terms and conditions',
+};
+
+/** Fallback polish for a block of client-facing text (no AI key):
+    same tidy-up fallbackPolish applies — never invents content. */
+function fallbackPolishText(text) {
+  let out = String(text || '').trim().replace(/\s+/g, ' ');
+  out = out.replace(/^./, (c) => c.toUpperCase());
+  if (out && !/[.!?]$/.test(out)) out += '.';
+  return out;
+}
+
+async function polishText(text, field) {
+  const label = ESTIMATE_TEXT_LABELS[field] || 'estimate';
+  const parsed = await chatJSON(
+    `You rewrite the ${label} section of a contractor's estimate so it reads ` +
+      'professionally and clearly for the client. Keep every fact, number, price, ' +
+      'date and name exactly as written; do not invent or drop content. ' +
+      'Respond with JSON: {"text":"..."}.',
+    String(text || '')
+  );
+  if (parsed && parsed.text) return String(parsed.text).slice(0, 8000);
+  return fallbackPolishText(text);
+}
+
 async function summarizeReport(report, findings) {
   const parsed = await chatJSON(
     'You write a short executive summary (3-5 sentences) for a home-inspection report. ' +
@@ -226,4 +255,4 @@ async function summarizeReport(report, findings) {
   return fallbackSummary(report, findings);
 }
 
-module.exports = { structureNotes, polishFinding, summarizeReport, aiConfigured, SEVERITIES };
+module.exports = { structureNotes, polishFinding, polishText, summarizeReport, aiConfigured, SEVERITIES };
