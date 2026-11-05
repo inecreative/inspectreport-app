@@ -798,6 +798,7 @@ function renderEditor() {
   renderPhotos();
   renderFindings();
   renderEstimate();
+  renderShare();
   renderPreview();
 }
 
@@ -1975,6 +1976,105 @@ $('#convertJobBtn').addEventListener('click', async () => {
   }
 });
 
+/* --- Estimate sharing (Phase 1b): public link, view tracking,
+       approval — one compact block in the estimate editor. --- */
+const EST_STATUS_LABEL = {
+  draft: 'Draft',
+  sent: 'Sent',
+  viewed: 'Viewed',
+  approved: 'Approved',
+  declined: 'Declined',
+};
+
+function fmtDateTime(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return String(iso).slice(0, 10);
+  return (
+    d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) +
+    ', ' +
+    d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+  );
+}
+
+function renderShare() {
+  const pill = $('#shareStatusPill');
+  if (!pill || !state.current) return;
+  const r = state.current.report;
+  if (r.doc_type !== 'estimate') return;
+  const status = r.estimate_status || 'draft';
+  pill.textContent = EST_STATUS_LABEL[status] || 'Draft';
+  pill.className = `status-pill st-${status}`;
+  const toggle = $('#shareEnabledToggle');
+  toggle.checked = Boolean(r.share_enabled);
+  const urlInput = $('#shareUrl');
+  if (r.share_enabled && r.share_token) {
+    urlInput.value = `${location.origin}/s/${r.share_token}`;
+    urlInput.placeholder = '';
+  } else {
+    urlInput.value = '';
+    urlInput.placeholder = r.share_token
+      ? 'Link is off — turn it on to share'
+      : 'Turn the link on to get a shareable URL';
+  }
+  $('#shareCopyBtn').disabled = !(r.share_enabled && r.share_token);
+  $('#markSentBtn').disabled = status === 'approved' || status === 'viewed';
+  $('#shareViewInfo').textContent = r.viewed_at
+    ? `Viewed ${fmtDateTime(r.viewed_at)} · ${r.view_count || 0} view${Number(r.view_count) === 1 ? '' : 's'}`
+    : 'Not viewed yet';
+  const info = $('#shareApprovalInfo');
+  if (r.approved_at) {
+    const chosen = (state.current.estimateItems || []).filter((it) =>
+      (r.approved_optionals || []).includes(it.id)
+    );
+    info.textContent =
+      `✓ Approved by ${r.approved_name || ''} on ${fmtDateTime(r.approved_at)}` +
+      (chosen.length
+        ? ` · Optional included: ${chosen.map((it) => it.description || 'Line item').join(', ')}`
+        : '');
+  } else if (status === 'declined') {
+    info.textContent =
+      `Declined${r.declined_at ? ` on ${fmtDateTime(r.declined_at)}` : ''}` +
+      (r.declined_reason ? ` — “${r.declined_reason}”` : '');
+  } else {
+    info.textContent = '';
+  }
+}
+
+$('#shareEnabledToggle').addEventListener('change', async (e) => {
+  if (!state.current) return;
+  await api(`/api/reports/${state.current.report.id}/share`, {
+    method: 'POST',
+    body: JSON.stringify({ enabled: e.target.checked }),
+  });
+  await refreshCurrent();
+});
+
+$('#shareCopyBtn').addEventListener('click', async () => {
+  const input = $('#shareUrl');
+  if (!input.value) return;
+  const msg = $('#shareMsg');
+  try {
+    await navigator.clipboard.writeText(input.value);
+    msg.textContent = '✓ Link copied';
+  } catch (_) {
+    input.select();
+    msg.textContent = 'Link selected — copy it with Ctrl/Cmd+C';
+  }
+  setTimeout(() => {
+    msg.textContent = '';
+  }, 3000);
+});
+
+$('#markSentBtn').addEventListener('click', async () => {
+  if (!state.current) return;
+  state.current = await api(`/api/reports/${state.current.report.id}/mark-sent`, {
+    method: 'POST',
+    body: '{}',
+  });
+  renderEditor();
+});
+
 /* Valid-until date = estimate date + valid_days (estimate date falls
    back to today when the date field is empty). pdf.js duplicates this. */
 function estimateValidUntil(report) {
@@ -2056,8 +2156,12 @@ function renderEstimatePreview() {
         ${report.exclusions_text ? `<h3>Exclusions</h3><p class="est-text">${esc(report.exclusions_text)}</p>` : ''}
         ${report.terms_text ? `<h3>Terms</h3><p class="est-text">${esc(report.terms_text)}</p>` : ''}
         <div class="total-row">
-          <span>Customer approval: ___________________</span>
-          <span>Date: ____________</span>
+          ${
+            report.approved_name
+              ? `<span>✓ Approved by ${esc(report.approved_name)} · ${esc(fmtDateTime(report.approved_at))}</span><span></span>`
+              : `<span>Customer approval: ___________________</span>
+          <span>Date: ____________</span>`
+          }
         </div>
         ${companyBlockHtml(report)}
       </div>
