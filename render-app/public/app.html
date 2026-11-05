@@ -25,6 +25,7 @@
     <div class="brand"><img class="brand-logo" src="/assets/logo.png" alt="Inspect Report AI" /></div>
     <div class="header-actions">
       <span id="userArea" class="user-area hidden">
+        <button id="templatesBtn" class="btn btn-ghost">Templates</button>
         <button id="profileBtn" class="btn btn-ghost profile-btn" title="User profile" aria-label="User profile">👤</button>
         <span id="userEmail" class="user-email"></span>
         <button id="logoutBtn" class="btn btn-ghost">Log out</button>
@@ -87,6 +88,13 @@
         <button id="deleteReportBtn" class="btn btn-danger-ghost">Delete report</button>
       </div>
 
+      <!-- Document type: big chunky buttons, outside the form -->
+      <div class="doctype-bar" role="group" aria-label="Document type">
+        <button type="button" class="doctype-btn is-active" data-doctype="inspection" aria-pressed="true"><span class="dt-icon" aria-hidden="true">🔍</span> Inspection Report</button>
+        <button type="button" class="doctype-btn" data-doctype="job" aria-pressed="false"><span class="dt-icon" aria-hidden="true">🔧</span> Job Report</button>
+        <button type="button" class="doctype-btn" data-doctype="estimate" aria-pressed="false"><span class="dt-icon" aria-hidden="true">🧾</span> Estimate</button>
+      </div>
+
       <div class="editor-grid">
       <div class="editor-col">
       <div id="statsRow" class="stats-row"></div>
@@ -94,12 +102,6 @@
       <div class="card">
         <h2>Property &amp; Client</h2>
         <div class="grid-2">
-          <label class="field"><span>Document type</span>
-            <select id="f_doc_type">
-              <option value="inspection">Inspection Report</option>
-              <option value="job">Job Report</option>
-              <option value="estimate">Estimate</option>
-            </select></label>
           <label class="field"><span>Property address</span>
             <input type="text" id="f_address" placeholder="123 Maple St, Austin, TX 78701" /></label>
           <label class="field"><span id="f_inspection_date_label">Inspection date</span>
@@ -118,12 +120,14 @@
         <div id="customFieldList"></div>
         <button id="addFieldBtn" class="btn btn-navy btn-sm">+ Add custom field</button>
 
-        <h3 class="subhead">Save this as template</h3>
+        <h3 class="subhead">Start from a template</h3>
         <div class="row-gap">
-          <input type="text" id="rtName" class="inline-input" placeholder="Template name (e.g. Condo inspection)" />
-          <button id="saveAsTemplateBtn" class="btn btn-white btn-sm">Save</button>
+          <select id="rtApplySelect" class="inline-input">
+            <option value="">Choose a template…</option>
+          </select>
+          <button id="applyTemplateBtn" class="btn btn-navy btn-sm">Apply</button>
         </div>
-        <div id="reportTemplateList"></div>
+        <p class="muted small">Adds the template's fields to this report. Create and edit templates on the Templates page (top right).</p>
       </div>
 
       <div class="card">
@@ -222,12 +226,14 @@
           <button id="addSectionBtn" class="btn btn-navy">+ Add section</button>
         </div>
         <div id="estimateTotals" class="est-totals-box"></div>
-        <h3 class="subhead">Save this estimate as template</h3>
+        <h3 class="subhead">Start from a template</h3>
         <div class="row-gap">
-          <input type="text" id="etName" placeholder="Template name — e.g. Bathroom leak repair" />
-          <button id="saveEstTemplateBtn" class="btn btn-amber">Save template</button>
+          <select id="etApplySelect" class="inline-input">
+            <option value="">Choose a template…</option>
+          </select>
+          <button id="applyEstTemplateBtn" class="btn btn-navy btn-sm">Apply</button>
         </div>
-        <div id="estimateTemplateList"></div>
+        <p class="muted small">Adds the template's line items to this estimate. Create and edit templates on the Templates page (top right).</p>
         <h3 class="subhead">When the client says yes</h3>
         <div class="row-gap">
           <button id="convertJobBtn" class="btn btn-navy">Convert to Job Report</button>
@@ -330,6 +336,61 @@
           <p id="priceBookMsg" class="muted small"></p>
         </div>
         <div class="card billing-card" id="billingCardProfile"></div>
+      </div>
+    </div>
+
+    <!-- Templates -->
+    <div id="templatesView" class="hidden">
+      <div class="row-between">
+        <button id="templatesBackBtn" class="btn btn-ghost">← All reports</button>
+      </div>
+      <div class="profile-col">
+        <h1>Templates</h1>
+
+        <div class="card">
+          <h2>Report templates</h2>
+          <p class="muted small">Sets of custom fields you can drop into any inspection or job report.</p>
+          <div id="rtPageList"></div>
+          <button id="rtNewBtn" class="btn btn-amber">+ New report template</button>
+          <div id="rtEditor" class="hidden">
+            <h3 class="subhead" id="rtEditorTitle">New report template</h3>
+            <label class="field"><span>Template name</span>
+              <input type="text" id="rtEditName" placeholder="e.g. Condo inspection" /></label>
+            <div id="rtEditFields"></div>
+            <button id="rtAddRowBtn" class="btn btn-navy btn-sm">+ Add field</button>
+            <p id="rtEditMsg" class="muted small" aria-live="polite"></p>
+            <div class="row-gap">
+              <button id="rtEditSaveBtn" class="btn btn-amber">Save template</button>
+              <button id="rtEditCancelBtn" class="btn btn-ghost">Cancel</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Estimate templates</h2>
+          <p class="muted small">Line items and wording you can drop into any estimate.</p>
+          <div id="etPageList"></div>
+          <button id="etNewBtn" class="btn btn-amber">+ New estimate template</button>
+          <div id="etEditor" class="hidden">
+            <h3 class="subhead" id="etEditorTitle">New estimate template</h3>
+            <label class="field"><span>Template name</span>
+              <input type="text" id="etEditName" placeholder="e.g. Bathroom leak repair" /></label>
+            <h3 class="subhead">Line items</h3>
+            <div id="etEditItems"></div>
+            <button id="etAddRowBtn" class="btn btn-navy btn-sm">+ Add item</button>
+            <label class="field"><span>Scope of work</span>
+              <textarea id="etEditScope" rows="3" placeholder="What this estimate covers…"></textarea></label>
+            <label class="field"><span>Exclusions</span>
+              <textarea id="etEditExclusions" rows="2" placeholder="What is NOT included…"></textarea></label>
+            <label class="field"><span>Terms</span>
+              <textarea id="etEditTerms" rows="2" placeholder="Payment terms, warranty…"></textarea></label>
+            <p id="etEditMsg" class="muted small" aria-live="polite"></p>
+            <div class="row-gap">
+              <button id="etEditSaveBtn" class="btn btn-amber">Save template</button>
+              <button id="etEditCancelBtn" class="btn btn-ghost">Cancel</button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </section>
