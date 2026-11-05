@@ -213,12 +213,13 @@
           <label class="field"><span>Deposit to schedule (%)</span>
             <input type="number" id="e_deposit_pct" min="0" max="100" step="0.5" /></label>
         </div>
-        <label class="field"><span>Scope of work</span>
+        <label class="field"><span>Scope of work <button type="button" class="btn btn-amber btn-sm est-polish-btn" data-polish-text="e_scope">✨ Polish</button></span>
           <textarea id="e_scope" rows="3" placeholder="What this estimate covers…"></textarea></label>
-        <label class="field"><span>Exclusions</span>
+        <label class="field"><span>Exclusions <button type="button" class="btn btn-amber btn-sm est-polish-btn" data-polish-text="e_exclusions">✨ Polish</button></span>
           <textarea id="e_exclusions" rows="2" placeholder="What is NOT included…"></textarea></label>
-        <label class="field"><span>Terms</span>
+        <label class="field"><span>Terms <button type="button" class="btn btn-amber btn-sm est-polish-btn" data-polish-text="e_terms">✨ Polish</button></span>
           <textarea id="e_terms" rows="2" placeholder="Payment terms, warranty…"></textarea></label>
+        <p id="estPolishError" class="error hidden"></p>
         <h3 class="subhead">Line items</h3>
         <div id="estimateItems"></div>
         <div class="row-gap">
