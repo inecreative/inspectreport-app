@@ -649,10 +649,12 @@ select.sev-Urgent { color: var(--red); font-weight: 700; }
 
 /* ---------- Public share page (/s/:token) ---------- */
 .share-wrap { max-width: 880px; margin: 0 auto; padding: 28px 16px 56px; }
-.share-brand { margin-bottom: 18px; }
-.share-brand img { height: 42px; width: auto; display: block; }
 .share-missing h1 { font-size: 26px; }
 .share-foot { text-align: center; margin-top: 18px; }
+.share-credit { text-align: center; margin-top: 10px; font-size: 12.5px; }
+.share-credit a { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); text-decoration: none; }
+.share-credit a:hover { text-decoration: underline; }
+.share-credit img { height: 15px; width: auto; }
 .opt-pick { flex: 0 0 auto; padding-top: 2px; }
 .opt-pick input { width: 21px; height: 21px; accent-color: var(--amber); cursor: pointer; }
 .approve-box {
