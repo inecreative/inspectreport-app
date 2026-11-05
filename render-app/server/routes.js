@@ -963,14 +963,39 @@ router.get(
   })
 );
 
-/* Save a report's current custom fields as a named template. Name only —
-   the fields are copied from the report, nothing else to fill in. */
+/* Create a report template. Two ways in:
+   - from scratch (Templates page): body carries fields: [{name, value}]
+   - from a report (legacy): body carries reportId and the report's
+     current custom fields are copied. Name only either way. */
 router.post(
   '/report-templates',
   auth.requireAuth,
   wrap(async (req, res) => {
     const name = String(req.body.name || '').trim();
     if (!name) return res.status(400).json({ error: 'Give the template a name.' });
+    if (Array.isArray(req.body.fields)) {
+      const fields = req.body.fields.map((f) => ({
+        name: String((f && f.name) || ''),
+        value: String((f && f.value) || ''),
+      }));
+      if (!fields.length) {
+        return res.status(400).json({ error: 'Add at least one field first.' });
+      }
+      const { rows } = await db.query(
+        'INSERT INTO report_templates (user_id, name) VALUES ($1, $2) RETURNING id',
+        [req.user.id, name]
+      );
+      const templateId = rows[0].id;
+      for (let i = 0; i < fields.length; i += 1) {
+        await db.query(
+          'INSERT INTO report_template_fields (template_id, name, value, sort_order) VALUES ($1, $2, $3, $4)',
+          [templateId, fields[i].name, fields[i].value, i]
+        );
+      }
+      return res
+        .status(201)
+        .json({ template: { id: templateId, name, fieldCount: fields.length } });
+    }
     const report = await ownReport(req.user.id, req.body.reportId);
     if (!report) return res.status(404).json({ error: 'Report not found.' });
     const { rows: fields } = await db.query(
@@ -1032,6 +1057,50 @@ router.post(
     }
     if (added) await touchReport(report.id);
     return res.json({ ok: true, added });
+  })
+);
+
+/* Update a report template from the Templates page: rename and/or
+   replace its field rows wholesale. */
+router.put(
+  '/report-templates/:id',
+  auth.requireAuth,
+  wrap(async (req, res) => {
+    const { rows: trows } = await db.query(
+      'SELECT * FROM report_templates WHERE id = $1 AND user_id = $2',
+      [req.params.id, req.user.id]
+    );
+    if (!trows.length) return res.status(404).json({ error: 'Template not found.' });
+    const tpl = trows[0];
+    const name = String(req.body.name ?? tpl.name).trim();
+    if (!name) return res.status(400).json({ error: 'Give the template a name.' });
+    let fields = null;
+    if (Array.isArray(req.body.fields)) {
+      fields = req.body.fields.map((f) => ({
+        name: String((f && f.name) || ''),
+        value: String((f && f.value) || ''),
+      }));
+      if (!fields.length) {
+        return res.status(400).json({ error: 'Add at least one field first.' });
+      }
+    }
+    await db.query('UPDATE report_templates SET name = $1 WHERE id = $2', [name, tpl.id]);
+    if (fields) {
+      await db.query('DELETE FROM report_template_fields WHERE template_id = $1', [tpl.id]);
+      for (let i = 0; i < fields.length; i += 1) {
+        await db.query(
+          'INSERT INTO report_template_fields (template_id, name, value, sort_order) VALUES ($1, $2, $3, $4)',
+          [tpl.id, fields[i].name, fields[i].value, i]
+        );
+      }
+    }
+    const { rows: saved } = await db.query(
+      'SELECT * FROM report_template_fields WHERE template_id = $1 ORDER BY sort_order, id',
+      [tpl.id]
+    );
+    return res.json({
+      template: { id: tpl.id, name, fields: saved, fieldCount: saved.length },
+    });
   })
 );
 
@@ -1208,14 +1277,74 @@ router.get(
   })
 );
 
-/* Save an estimate's items + texts as a named template. Name only —
-   everything is copied from the estimate, nothing else to fill in. */
+/* Normalize a client-supplied template line item (Templates page). */
+function cleanTemplateItem(it) {
+  const b = it || {};
+  return {
+    section: String(b.section || ''),
+    description: String(b.description || ''),
+    kind: cleanKind(b.kind),
+    qty: Number(b.qty) || 0,
+    unit: String(b.unit || ''),
+    unit_price: Number(b.unit_price) || 0,
+    optional: Boolean(b.optional),
+  };
+}
+
+async function insertTemplateItems(templateId, items) {
+  for (let i = 0; i < items.length; i += 1) {
+    const it = items[i];
+    await db.query(
+      `INSERT INTO estimate_template_items
+         (template_id, section, description, kind, qty, unit, unit_price, optional, sort_order)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [
+        templateId,
+        it.section,
+        it.description,
+        it.kind,
+        it.qty,
+        it.unit,
+        it.unit_price,
+        it.optional,
+        i,
+      ]
+    );
+  }
+}
+
+/* Create an estimate template. Two ways in:
+   - from scratch (Templates page): body carries items + the three texts
+   - from an estimate (legacy): body carries reportId and the estimate's
+     items + texts are copied. */
 router.post(
   '/estimate-templates',
   auth.requireAuth,
   wrap(async (req, res) => {
     const name = String(req.body.name || '').trim();
     if (!name) return res.status(400).json({ error: 'Give the template a name.' });
+    if (Array.isArray(req.body.items)) {
+      const items = req.body.items.map(cleanTemplateItem);
+      if (!items.length) {
+        return res.status(400).json({ error: 'Add at least one line item first.' });
+      }
+      const { rows } = await db.query(
+        `INSERT INTO estimate_templates (user_id, name, scope_text, exclusions_text, terms_text)
+         VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+        [
+          req.user.id,
+          name,
+          String(req.body.scopeText ?? req.body.scope_text ?? ''),
+          String(req.body.exclusionsText ?? req.body.exclusions_text ?? ''),
+          String(req.body.termsText ?? req.body.terms_text ?? ''),
+        ]
+      );
+      const templateId = rows[0].id;
+      await insertTemplateItems(templateId, items);
+      return res
+        .status(201)
+        .json({ template: { id: templateId, name, itemCount: items.length } });
+    }
     const report = await ownReport(req.user.id, req.body.reportId);
     if (!report) return res.status(404).json({ error: 'Report not found.' });
     const { rows: items } = await db.query(
@@ -1309,6 +1438,60 @@ router.post(
     }
     if (titems.length || sets.length) await touchReport(report.id);
     return res.json({ ok: true, added: titems.length });
+  })
+);
+
+/* Update an estimate template from the Templates page: rename, edit
+   the three texts, and/or replace its item rows wholesale. */
+router.put(
+  '/estimate-templates/:id',
+  auth.requireAuth,
+  wrap(async (req, res) => {
+    const { rows: trows } = await db.query(
+      'SELECT * FROM estimate_templates WHERE id = $1 AND user_id = $2',
+      [req.params.id, req.user.id]
+    );
+    if (!trows.length) return res.status(404).json({ error: 'Template not found.' });
+    const tpl = trows[0];
+    const name = String(req.body.name ?? tpl.name).trim();
+    if (!name) return res.status(400).json({ error: 'Give the template a name.' });
+    let items = null;
+    if (Array.isArray(req.body.items)) {
+      items = req.body.items.map(cleanTemplateItem);
+      if (!items.length) {
+        return res.status(400).json({ error: 'Add at least one line item first.' });
+      }
+    }
+    await db.query(
+      `UPDATE estimate_templates
+          SET name = $1, scope_text = $2, exclusions_text = $3, terms_text = $4
+        WHERE id = $5`,
+      [
+        name,
+        String(req.body.scopeText ?? req.body.scope_text ?? tpl.scope_text),
+        String(req.body.exclusionsText ?? req.body.exclusions_text ?? tpl.exclusions_text),
+        String(req.body.termsText ?? req.body.terms_text ?? tpl.terms_text),
+        tpl.id,
+      ]
+    );
+    if (items) {
+      await db.query('DELETE FROM estimate_template_items WHERE template_id = $1', [tpl.id]);
+      await insertTemplateItems(tpl.id, items);
+    }
+    const { rows: saved } = await db.query(
+      'SELECT * FROM estimate_template_items WHERE template_id = $1 ORDER BY sort_order, id',
+      [tpl.id]
+    );
+    const { rows: updated } = await db.query('SELECT * FROM estimate_templates WHERE id = $1', [
+      tpl.id,
+    ]);
+    return res.json({
+      template: {
+        ...updated[0],
+        items: saved.map(shapeEstimateItem),
+        itemCount: saved.length,
+      },
+    });
   })
 );
 
