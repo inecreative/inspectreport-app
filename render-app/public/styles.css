@@ -615,3 +615,60 @@ select.sev-Urgent { color: var(--red); font-weight: 700; }
 .est-totals .est-grand { font-family: Archivo, sans-serif; font-size: 19px; font-weight: 800; color: #0F2A3D; }
 .est-opt-total { font-size: 15px; font-weight: 700; margin: 6px 0 0; }
 .est-text { font-size: 15px; line-height: 1.65; white-space: pre-wrap; margin: 0; }
+
+/* ---------- Estimate sharing (Phase 1b) ---------- */
+.share-box { border: 1.5px solid var(--line); border-radius: var(--radius); padding: 14px; }
+.share-box .row-gap { margin-bottom: 10px; }
+.share-box .row-gap:last-of-type { margin-bottom: 4px; }
+.share-link-row input { flex: 1 1 260px; font-size: 15px; }
+#shareApprovalInfo { font-weight: 600; margin: 6px 0 0; }
+.status-pill {
+  display: inline-block;
+  font-family: Archivo, sans-serif;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: #F3F4F6;
+  color: #374151;
+}
+.status-pill.st-sent { background: var(--navy); color: #fff; }
+.status-pill.st-viewed { background: var(--amber-light); color: var(--amber-text); }
+.status-pill.st-approved { background: var(--green-bg); color: var(--green); }
+.status-pill.st-declined { background: var(--red-bg); color: var(--red); }
+
+/* ---------- Public share page (/s/:token) ---------- */
+.share-wrap { max-width: 880px; margin: 0 auto; padding: 28px 16px 56px; }
+.share-brand { margin-bottom: 18px; }
+.share-brand img { height: 42px; width: auto; display: block; }
+.share-missing h1 { font-size: 26px; }
+.share-foot { text-align: center; margin-top: 18px; }
+.opt-pick { flex: 0 0 auto; padding-top: 2px; }
+.opt-pick input { width: 21px; height: 21px; accent-color: var(--amber); cursor: pointer; }
+.approve-box {
+  margin-top: 26px;
+  border: 2px solid var(--amber);
+  background: var(--surface2);
+  border-radius: var(--radius);
+  padding: 20px;
+}
+.approve-box h3 { margin-top: 0; }
+.approve-done {
+  margin-top: 26px;
+  border: 1.5px solid var(--green);
+  background: var(--green-bg);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+}
+.approve-done .approve-line { font-size: 17px; margin: 0; }
+.approve-done .approve-opts { margin: 6px 0 0; font-size: 15px; }
+.decline-form {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 22px;
+}
+.decline-form input { flex: 1 1 220px; }
