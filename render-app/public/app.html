@@ -234,6 +234,24 @@
           <button id="applyEstTemplateBtn" class="btn btn-navy btn-sm">Apply</button>
         </div>
         <p class="muted small">Adds the template's line items to this estimate. Create and edit templates on the Templates page (top right).</p>
+        <h3 class="subhead">Share with your client</h3>
+        <div class="share-box">
+          <div class="row-gap">
+            <span id="shareStatusPill" class="status-pill st-draft">Draft</span>
+            <span id="shareViewInfo" class="muted small">Not viewed yet</span>
+          </div>
+          <div class="row-gap share-link-row">
+            <input type="text" id="shareUrl" readonly placeholder="Turn the link on to get a shareable URL" />
+            <button id="shareCopyBtn" class="btn btn-navy btn-sm">Copy link</button>
+          </div>
+          <div class="row-gap">
+            <label class="ei-opt"><input type="checkbox" id="shareEnabledToggle" /> Link enabled</label>
+            <button id="markSentBtn" class="btn btn-white btn-sm">Mark as sent</button>
+            <span id="shareMsg" class="muted small" aria-live="polite"></span>
+          </div>
+          <p id="shareApprovalInfo" class="small"></p>
+          <p class="muted small">Send the link by text or email — your client sees this estimate and can approve it right on the page. No account needed.</p>
+        </div>
         <h3 class="subhead">When the client says yes</h3>
         <div class="row-gap">
           <button id="convertJobBtn" class="btn btn-navy">Convert to Job Report</button>
