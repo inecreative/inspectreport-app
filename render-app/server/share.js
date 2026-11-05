@@ -171,6 +171,15 @@ function companyBlockHtml(report, profile) {
   return `<div class="report-company">${coName ? `<p class="rc-name">${esc(coName)}</p>` : ''}${coLine ? `<p class="rc-line">${esc(coLine)}</p>` : ''}</div>`;
 }
 
+/* Tiny "Powered by" credit at the very bottom of the public page: the
+   page carries the PRO's own branding, so our mark is only this small
+   footer line (icon + text) linked to the landing page — the big logo
+   that used to sit at the top was removed on the founder's call
+   (2026-11-05). */
+function footerCreditHtml() {
+  return `<p class="share-credit"><a href="https://inspect-report.com/" target="_blank" rel="noopener"><img src="/assets/logo-icon.png" alt="" />Powered by InspectReport AI</a></p>`;
+}
+
 function notFoundPage(res) {
   res.setHeader('X-Robots-Tag', 'noindex, nofollow');
   return res.status(404).send(`<!DOCTYPE html>
@@ -185,11 +194,11 @@ function notFoundPage(res) {
 </head>
 <body>
 <main class="share-wrap">
-  <div class="share-brand"><img src="/assets/logo.png" alt="Inspect Report AI" /></div>
   <div class="card share-missing">
     <h1>This link isn't available</h1>
     <p class="muted">The estimate link may have been turned off, or the address is incomplete. Please contact the sender for a fresh link.</p>
   </div>
+  ${footerCreditHtml()}
 </main>
 </body>
 </html>`);
@@ -326,7 +335,6 @@ function renderSharePage(data, opts = {}) {
 </head>
 <body>
 <main class="share-wrap">
-  <div class="share-brand"><img src="/assets/logo.png" alt="Inspect Report AI" /></div>
   <article class="report">
     <div class="report-head">
       <span class="badge">ESTIMATE</span>
@@ -342,7 +350,8 @@ function renderSharePage(data, opts = {}) {
     </div>
   </article>
   ${declineBlock}
-  <p class="share-foot muted small">Prepared with InspectReport AI · This page is a private link — please don't forward it.</p>
+  <p class="share-foot muted small">This page is a private link — please don't forward it.</p>
+  ${footerCreditHtml()}
 </main>
 </body>
 </html>`;
