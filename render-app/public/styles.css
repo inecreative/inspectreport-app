@@ -547,3 +547,50 @@ select.sev-Urgent { color: var(--red); font-weight: 700; }
 }
 .admin-title small { font-size: 12.5px; opacity: .75; font-weight: 600; }
 .admin-status { min-height: 18px; margin: 10px 0 0; font-weight: 600; }
+
+/* ---------- Estimate editor + document ---------- */
+.inline-2 { display: flex; gap: 8px; }
+.inline-2 input { flex: 1 1 auto; }
+.inline-2 select { flex: 0 0 108px; width: auto; }
+.est-section { border: 1.5px solid var(--line); border-radius: 10px; padding: 14px; margin-bottom: 14px; }
+.est-section-head { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; }
+.est-section-head .es-name { flex: 1; font-weight: 800; }
+.est-item { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+.est-item .ei-desc { flex: 3 1 200px; }
+.est-item .ei-kind { flex: 0 0 118px; width: auto; }
+.est-item .ei-qty { flex: 0 0 80px; width: auto; }
+.est-item .ei-unit { flex: 0 0 78px; width: auto; }
+.est-item .ei-price { flex: 0 0 108px; width: auto; }
+.est-item .ei-total { font-weight: 800; min-width: 84px; text-align: right; color: var(--navy); }
+.ei-opt { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 700; color: var(--muted); }
+.ei-opt input { width: auto; }
+.est-section-foot { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 4px; }
+.est-section-foot .pb-pick { width: auto; flex: 0 1 260px; }
+.est-item input, .est-item select, .est-section-head input, .est-section-foot select,
+#newSectionName, #etName, .row-gap input, .row-gap select {
+  font-family: inherit;
+  padding: 12px 14px;
+  border: 1.5px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 16.5px;
+  font-weight: 500;
+  outline: none;
+}
+#newSectionName, #etName, .row-gap input { flex: 1 1 200px; }
+.est-item input:focus, .est-item select:focus, .est-section-head input:focus,
+#newSectionName:focus, #etName:focus, .row-gap input:focus, .row-gap select:focus {
+  border-color: var(--amber);
+  box-shadow: 0 0 0 3px rgba(217, 119, 6, .15);
+}
+.est-totals-box { border-top: 1.5px solid var(--line); margin-top: 16px; padding-top: 12px; }
+.est-totals-box > div { display: flex; justify-content: space-between; gap: 12px; padding: 3px 0; font-size: 16px; }
+.est-totals-box .est-grand { font-family: Archivo, sans-serif; font-size: 19px; font-weight: 800; color: var(--navy); }
+/* Estimate document (preview; pdf.js mirrors this) */
+.est-amt { margin-left: auto; font-weight: 800; color: #111827; white-space: nowrap; }
+.est-totals { margin-top: 22px; padding-top: 14px; border-top: 1.5px solid #E5E7EB; }
+.est-totals > div { display: flex; justify-content: space-between; gap: 12px; padding: 3px 0; font-size: 15.5px; }
+.est-totals .est-grand { font-family: Archivo, sans-serif; font-size: 19px; font-weight: 800; color: #0F2A3D; }
+.est-opt-total { font-size: 15px; font-weight: 700; margin: 6px 0 0; }
+.est-text { font-size: 15px; line-height: 1.65; white-space: pre-wrap; margin: 0; }
