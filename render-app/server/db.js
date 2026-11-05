@@ -150,6 +150,76 @@ const SCHEMA = [
   `ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_subscription_id TEXT`,
   `ALTER TABLE users ADD COLUMN IF NOT EXISTS cancel_requested_at TIMESTAMPTZ`,
   `ALTER TABLE users ADD COLUMN IF NOT EXISTS cancel_at_period_end BOOLEAN NOT NULL DEFAULT false`,
+  /* Estimate document type (Phase 1a): per-report estimate fields.
+     Real columns (not custom fields) so totals/validity math is exact.
+     Must run AFTER the reports table exists. estimate_number is filled
+     in by the create route as EST-<zero-padded report id>. */
+  `ALTER TABLE reports ADD COLUMN IF NOT EXISTS estimate_number TEXT`,
+  `ALTER TABLE reports ADD COLUMN IF NOT EXISTS valid_days INTEGER NOT NULL DEFAULT 30`,
+  `ALTER TABLE reports ADD COLUMN IF NOT EXISTS scope_text TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE reports ADD COLUMN IF NOT EXISTS exclusions_text TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE reports ADD COLUMN IF NOT EXISTS terms_text TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE reports ADD COLUMN IF NOT EXISTS deposit_pct NUMERIC NOT NULL DEFAULT 0`,
+  `ALTER TABLE reports ADD COLUMN IF NOT EXISTS discount_value NUMERIC NOT NULL DEFAULT 0`,
+  `ALTER TABLE reports ADD COLUMN IF NOT EXISTS discount_type TEXT NOT NULL DEFAULT 'pct'`,
+  `ALTER TABLE reports ADD COLUMN IF NOT EXISTS tax_rate NUMERIC NOT NULL DEFAULT 0`,
+  /* Line items for estimate documents, grouped by a free-text section
+     name. Optional items are quoted separately and never counted in
+     the estimate total. */
+  `CREATE TABLE IF NOT EXISTS estimate_items (
+     id SERIAL PRIMARY KEY,
+     report_id INTEGER NOT NULL REFERENCES reports(id) ON DELETE CASCADE,
+     section TEXT NOT NULL DEFAULT '',
+     description TEXT NOT NULL DEFAULT '',
+     kind TEXT NOT NULL DEFAULT 'item',
+     qty NUMERIC NOT NULL DEFAULT 1,
+     unit TEXT NOT NULL DEFAULT '',
+     unit_price NUMERIC NOT NULL DEFAULT 0,
+     optional BOOLEAN NOT NULL DEFAULT false,
+     sort_order INTEGER NOT NULL DEFAULT 0,
+     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+   )`,
+  /* The user's own saved line items ("my price book"), reused across
+     estimates. Managed as a simple list on the User Profile page. */
+  `CREATE TABLE IF NOT EXISTS price_book (
+     id SERIAL PRIMARY KEY,
+     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+     name TEXT NOT NULL DEFAULT '',
+     kind TEXT NOT NULL DEFAULT 'item',
+     unit TEXT NOT NULL DEFAULT '',
+     unit_price NUMERIC NOT NULL DEFAULT 0,
+     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+   )`,
+  /* Estimate templates, same philosophy as report templates v2: save
+     by NAME only (the current estimate's items + texts are copied),
+     apply appends, delete removes. No template editor. */
+  `CREATE TABLE IF NOT EXISTS estimate_templates (
+     id SERIAL PRIMARY KEY,
+     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+     name TEXT NOT NULL DEFAULT '',
+     scope_text TEXT NOT NULL DEFAULT '',
+     exclusions_text TEXT NOT NULL DEFAULT '',
+     terms_text TEXT NOT NULL DEFAULT '',
+     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+   )`,
+  `CREATE TABLE IF NOT EXISTS estimate_template_items (
+     id SERIAL PRIMARY KEY,
+     template_id INTEGER NOT NULL REFERENCES estimate_templates(id) ON DELETE CASCADE,
+     section TEXT NOT NULL DEFAULT '',
+     description TEXT NOT NULL DEFAULT '',
+     kind TEXT NOT NULL DEFAULT 'item',
+     qty NUMERIC NOT NULL DEFAULT 1,
+     unit TEXT NOT NULL DEFAULT '',
+     unit_price NUMERIC NOT NULL DEFAULT 0,
+     optional BOOLEAN NOT NULL DEFAULT false,
+     sort_order INTEGER NOT NULL DEFAULT 0
+   )`,
+  /* Estimate defaults on the profile: new estimates start prefilled
+     with the user's own terms / exclusions / validity / deposit. */
+  `ALTER TABLE users ADD COLUMN IF NOT EXISTS est_terms TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE users ADD COLUMN IF NOT EXISTS est_exclusions TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE users ADD COLUMN IF NOT EXISTS est_valid_days INTEGER NOT NULL DEFAULT 30`,
+  `ALTER TABLE users ADD COLUMN IF NOT EXISTS est_deposit_pct NUMERIC NOT NULL DEFAULT 0`,
 ];
 
 async function init() {
