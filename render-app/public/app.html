@@ -98,6 +98,7 @@
             <select id="f_doc_type">
               <option value="inspection">Inspection Report</option>
               <option value="job">Job Report</option>
+              <option value="estimate">Estimate</option>
             </select></label>
           <label class="field"><span>Property address</span>
             <input type="text" id="f_address" placeholder="123 Maple St, Austin, TX 78701" /></label>
@@ -156,7 +157,7 @@
         <div id="photoGrid" class="photo-grid"></div>
       </div>
 
-      <div class="card">
+      <div class="card" id="findingsCard">
         <h2>Findings</h2>
         <label class="field">
           <span>Field notes — write it rough, AI structures it</span>
@@ -179,13 +180,59 @@
         <div id="findingList"></div>
       </div>
 
-      <div class="card">
+      <div class="card" id="summaryCard">
         <h2>Summary</h2>
         <label class="field">
           <span>Executive summary (appears at the top of the report)</span>
           <textarea id="summaryBox" rows="4" placeholder="Summarize the inspection for your client…"></textarea>
         </label>
         <button id="summarizeBtn" class="btn btn-amber">✨ Generate summary with AI</button>
+      </div>
+
+      <div class="card hidden" id="estimateCard">
+        <h2>Estimate</h2>
+        <div class="grid-2">
+          <label class="field"><span>Estimate number</span>
+            <input type="text" id="e_number" readonly /></label>
+          <label class="field"><span>Valid for (days)</span>
+            <input type="number" id="e_valid_days" min="0" max="365" step="1" /></label>
+          <label class="field"><span>Discount</span>
+            <span class="inline-2">
+              <input type="number" id="e_discount_value" min="0" step="0.01" />
+              <select id="e_discount_type">
+                <option value="pct">% off</option>
+                <option value="amt">$ off</option>
+              </select>
+            </span></label>
+          <label class="field"><span>Tax rate (%)</span>
+            <input type="number" id="e_tax_rate" min="0" max="100" step="0.01" /></label>
+          <label class="field"><span>Deposit to schedule (%)</span>
+            <input type="number" id="e_deposit_pct" min="0" max="100" step="0.5" /></label>
+        </div>
+        <label class="field"><span>Scope of work</span>
+          <textarea id="e_scope" rows="3" placeholder="What this estimate covers…"></textarea></label>
+        <label class="field"><span>Exclusions</span>
+          <textarea id="e_exclusions" rows="2" placeholder="What is NOT included…"></textarea></label>
+        <label class="field"><span>Terms</span>
+          <textarea id="e_terms" rows="2" placeholder="Payment terms, warranty…"></textarea></label>
+        <h3 class="subhead">Line items</h3>
+        <div id="estimateItems"></div>
+        <div class="row-gap">
+          <input type="text" id="newSectionName" placeholder="New section name — e.g. Plumbing" />
+          <button id="addSectionBtn" class="btn btn-navy">+ Add section</button>
+        </div>
+        <div id="estimateTotals" class="est-totals-box"></div>
+        <h3 class="subhead">Save this estimate as template</h3>
+        <div class="row-gap">
+          <input type="text" id="etName" placeholder="Template name — e.g. Bathroom leak repair" />
+          <button id="saveEstTemplateBtn" class="btn btn-amber">Save template</button>
+        </div>
+        <div id="estimateTemplateList"></div>
+        <h3 class="subhead">When the client says yes</h3>
+        <div class="row-gap">
+          <button id="convertJobBtn" class="btn btn-navy">Convert to Job Report</button>
+        </div>
+        <p class="muted small">Creates a new Job Report with the same client and property, and each priced line item as a job item. This estimate stays as-is.</p>
       </div>
 
       </div><!-- /.editor-col -->
@@ -249,6 +296,39 @@
           </form>
         </div>
 
+        <div class="card">
+          <h2>Estimate defaults</h2>
+          <p class="muted small">New estimates start with these. You can still change them on each estimate.</p>
+          <form id="estDefaultsForm">
+            <label class="field"><span>Default terms</span>
+              <textarea id="p_est_terms" rows="3" placeholder="e.g. Payment due on completion. Workmanship guaranteed 1 year."></textarea></label>
+            <label class="field"><span>Default exclusions</span>
+              <textarea id="p_est_exclusions" rows="2" placeholder="e.g. Permits and hidden damage found after opening walls are not included."></textarea></label>
+            <div class="grid-2">
+              <label class="field"><span>Estimate valid for (days)</span>
+                <input type="number" id="p_est_valid_days" min="0" max="365" step="1" /></label>
+              <label class="field"><span>Deposit to schedule (%)</span>
+                <input type="number" id="p_est_deposit_pct" min="0" max="100" step="0.5" /></label>
+            </div>
+            <button type="submit" class="btn btn-navy">Save estimate defaults</button>
+            <p id="estDefaultsMsg" class="muted small"></p>
+          </form>
+          <h3 class="subhead">My price book</h3>
+          <p class="muted small">Your own line items, ready to drop into any estimate.</p>
+          <div id="priceBookList"></div>
+          <div class="row-gap">
+            <input type="text" id="pb_name" placeholder="Item name — e.g. Leak repair labor" />
+            <select id="pb_kind">
+              <option value="item">Item</option>
+              <option value="labor">Labor</option>
+              <option value="material">Material</option>
+            </select>
+            <input type="text" id="pb_unit" placeholder="Unit (hr, ea…)" />
+            <input type="number" id="pb_price" placeholder="Price" min="0" step="0.01" />
+            <button id="pbAddBtn" class="btn btn-amber">Add</button>
+          </div>
+          <p id="priceBookMsg" class="muted small"></p>
+        </div>
         <div class="card billing-card" id="billingCardProfile"></div>
       </div>
     </div>
