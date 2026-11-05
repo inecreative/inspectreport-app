@@ -5,6 +5,7 @@ const express = require('express');
 const db = require('./db');
 const { authMiddleware } = require('./auth');
 const routes = require('./routes');
+const share = require('./share');
 
 const app = express();
 
@@ -21,6 +22,15 @@ app.get('/api/health', (req, res) => {
 });
 
 app.use('/api', routes);
+
+// Public estimate share pages (Phase 1b): /s/<token> is a read-only
+// estimate document a client can view and approve — no login. The
+// approve/decline forms post plain form data, hence the urlencoded
+// parser scoped to /s (the global JSON parser above skips it).
+app.use('/s', express.urlencoded({ extended: false, limit: '16kb' }));
+app.get('/s/:token', share.page);
+app.post('/s/:token/approve', share.approve);
+app.post('/s/:token/decline', share.decline);
 
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 
