@@ -9,7 +9,9 @@ const state = {
   billing: null,
   profile: null,
   templates: [],
-  current: null, // { report, customFields, findings, photos }
+  estTemplates: [],
+  priceBook: [],
+  current: null, // { report, customFields, findings, photos, estimateItems }
   authMode: 'login', // or 'signup'
 };
 
@@ -24,6 +26,62 @@ function esc(s) {
 function money(n) {
   return `$${Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
 }
+
+/* Estimates are priced to the cent (labor rates, materials), unlike
+   finding costs which round to whole dollars. */
+function moneyC(n) {
+  return `$${Number(n || 0).toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+function round2(n) {
+  return Math.round(Number(n || 0) * 100) / 100;
+}
+
+function lineTotal(it) {
+  return round2(Number(it.qty || 0) * Number(it.unit_price || 0));
+}
+
+/* Canonical estimate math — pdf.js duplicates this exactly so the
+   printed estimate always matches the preview. Optional items are
+   quoted separately and NEVER counted in the total. */
+function estimateTotals(items, report) {
+  const list = items || [];
+  const subtotal = round2(list.filter((i) => !i.optional).reduce((s, i) => s + lineTotal(i), 0));
+  const optionalSubtotal = round2(
+    list.filter((i) => i.optional).reduce((s, i) => s + lineTotal(i), 0)
+  );
+  const dv = Number(report.discount_value || 0);
+  const discount = round2(
+    report.discount_type === 'amt' ? Math.min(dv, subtotal) : (subtotal * dv) / 100
+  );
+  const taxable = round2(subtotal - discount);
+  const taxRate = Number(report.tax_rate || 0);
+  const tax = round2((taxable * taxRate) / 100);
+  const total = round2(taxable + tax);
+  const depositPct = Number(report.deposit_pct || 0);
+  const deposit = round2((total * depositPct) / 100);
+  return { subtotal, optionalSubtotal, discount, taxable, taxRate, tax, total, depositPct, deposit };
+}
+
+/* Group line items by section name, in first-appearance order. */
+function estimateSections(items) {
+  const order = [];
+  const map = new Map();
+  for (const it of items || []) {
+    const name = it.section || '';
+    if (!map.has(name)) {
+      map.set(name, []);
+      order.push(name);
+    }
+    map.get(name).push(it);
+  }
+  return order.map((name) => ({ name, items: map.get(name) }));
+}
+
+const KIND_LABEL = { labor: 'Labor', material: 'Material', item: 'Item' };
 
 /* --- Autosave status -----------------------------------------------
    There is no Save button anywhere in the editor — every field saves on
@@ -118,6 +176,8 @@ async function initAuth() {
     await loadBilling();
     await fetchProfile();
     await loadReports();
+    await loadEstTemplates();
+    await loadPriceBook();
   } catch (_) {
     showAuth();
     // Landing page CTAs link here with ?mode=signup to start on the
@@ -161,6 +221,8 @@ $('#authForm').addEventListener('submit', async (e) => {
     await loadBilling();
     await fetchProfile();
     await loadReports();
+    await loadEstTemplates();
+    await loadPriceBook();
   } catch (err) {
     errBox.textContent = err.message;
     errBox.classList.remove('hidden');
@@ -424,6 +486,11 @@ async function loadProfile() {
   $('#p_company_address').value = p.companyAddress || '';
   $('#p_email').value = p.email || (state.user && state.user.email) || '';
   $('#profileMsg').textContent = '';
+  $('#p_est_terms').value = p.estTerms || '';
+  $('#p_est_exclusions').value = p.estExclusions || '';
+  $('#p_est_valid_days').value = p.estValidDays ?? 30;
+  $('#p_est_deposit_pct').value = p.estDepositPct ?? 0;
+  renderPriceBook();
 }
 
 function showProfile() {
@@ -431,6 +498,7 @@ function showProfile() {
   $('#editorView').classList.add('hidden');
   $('#profileView').classList.remove('hidden');
   loadProfile();
+  loadPriceBook();
   renderBilling();
 }
 
@@ -463,6 +531,89 @@ $('#profileForm').addEventListener('submit', async (e) => {
     });
     state.profile = profile;
     msg.textContent = '✓ Profile saved.';
+  } catch (err) {
+    msg.textContent = err.message;
+  }
+});
+
+$('#estDefaultsForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const msg = $('#estDefaultsMsg');
+  msg.textContent = 'Saving…';
+  try {
+    const { profile } = await api('/api/profile', {
+      method: 'PUT',
+      body: JSON.stringify({
+        estTerms: $('#p_est_terms').value,
+        estExclusions: $('#p_est_exclusions').value,
+        estValidDays: Number($('#p_est_valid_days').value) || 0,
+        estDepositPct: Number($('#p_est_deposit_pct').value) || 0,
+      }),
+    });
+    state.profile = profile;
+    msg.textContent = '✓ Estimate defaults saved.';
+  } catch (err) {
+    msg.textContent = err.message;
+  }
+});
+
+/* --- Price book (profile page list; also feeds the estimate editor) --- */
+async function loadPriceBook() {
+  try {
+    const { entries } = await api('/api/price-book');
+    state.priceBook = entries;
+  } catch (_) {
+    state.priceBook = [];
+  }
+  renderPriceBook();
+  if (state.current && state.current.report.doc_type === 'estimate') renderEstimate();
+}
+
+function renderPriceBook() {
+  const wrap = $('#priceBookList');
+  if (!wrap) return;
+  wrap.innerHTML = state.priceBook.length
+    ? state.priceBook
+        .map(
+          (e) => `
+      <div class="tpl-row">
+        <span class="tpl-title">${esc(e.name)}</span>
+        <span class="muted small">${esc(KIND_LABEL[e.kind] || 'Item')}${e.unit ? ` · ${esc(e.unit)}` : ''} · ${moneyC(e.unit_price)}</span>
+        <button class="btn btn-danger-ghost btn-sm" data-del-pb="${e.id}">Delete</button>
+      </div>`
+        )
+        .join('')
+    : '<p class="muted small">No price book items yet — add your first one below.</p>';
+  wrap.querySelectorAll('[data-del-pb]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      await api(`/api/price-book/${btn.dataset.delPb}`, { method: 'DELETE' });
+      await loadPriceBook();
+    });
+  });
+}
+
+$('#pbAddBtn').addEventListener('click', async () => {
+  const msg = $('#priceBookMsg');
+  const name = $('#pb_name').value.trim();
+  if (!name) {
+    $('#pb_name').focus();
+    return;
+  }
+  try {
+    await api('/api/price-book', {
+      method: 'POST',
+      body: JSON.stringify({
+        name,
+        kind: $('#pb_kind').value,
+        unit: $('#pb_unit').value.trim(),
+        unit_price: Number($('#pb_price').value) || 0,
+      }),
+    });
+    $('#pb_name').value = '';
+    $('#pb_unit').value = '';
+    $('#pb_price').value = '';
+    msg.textContent = '✓ Added to your price book.';
+    await loadPriceBook();
   } catch (err) {
     msg.textContent = err.message;
   }
@@ -514,7 +665,11 @@ async function loadReports() {
           }</div>
         </div>
         <div class="rc-stats">
-          ${r.finding_count} findings · ${r.urgent_count} urgent<br />${money(r.total_cost)} est. repairs
+          ${
+            r.doc_type === 'estimate'
+              ? `${r.item_count || 0} line items<br />${moneyC(r.item_total || 0)} estimate`
+              : `${r.finding_count} findings · ${r.urgent_count} urgent<br />${money(r.total_cost)} est. repairs`
+          }
         </div>
       </div>`
     )
@@ -533,6 +688,7 @@ $('#sampleBtn').addEventListener('click', async () => {
   const data = await api('/api/reports/sample', { method: 'POST', body: '{}' });
   state.current = data;
   await loadTemplates();
+  await loadEstTemplates();
   showEditor();
 });
 
@@ -543,6 +699,7 @@ $('#sampleBtn').addEventListener('click', async () => {
 async function openReport(id) {
   state.current = await api(`/api/reports/${id}`);
   await loadTemplates();
+  await loadEstTemplates();
   showEditor();
 }
 
@@ -553,7 +710,7 @@ function showEditor() {
   updatePdfButton();
   const r = state.current.report;
   resetSaveStatus();
-  $('#f_doc_type').value = r.doc_type === 'job' ? 'job' : 'inspection';
+  $('#f_doc_type').value = ['job', 'estimate'].includes(r.doc_type) ? r.doc_type : 'inspection';
   updateDocTypeLabels();
   $('#f_address').value = r.address || '';
   $('#f_client_name').value = r.client_name || '';
@@ -562,6 +719,15 @@ function showEditor() {
   $('#f_inspector_name').value = r.inspector_name || '';
   $('#f_inspection_date').value = r.inspection_date ? String(r.inspection_date).slice(0, 10) : '';
   $('#summaryBox').value = r.summary || '';
+  $('#e_number').value = r.estimate_number || '';
+  $('#e_valid_days').value = r.valid_days ?? 30;
+  $('#e_discount_value').value = r.discount_value ?? 0;
+  $('#e_discount_type').value = r.discount_type === 'amt' ? 'amt' : 'pct';
+  $('#e_tax_rate').value = r.tax_rate ?? 0;
+  $('#e_deposit_pct').value = r.deposit_pct ?? 0;
+  $('#e_scope').value = r.scope_text || '';
+  $('#e_exclusions').value = r.exclusions_text || '';
+  $('#e_terms').value = r.terms_text || '';
   $('#notesBox').value = '';
   $('#structureMsg').textContent = '';
   renderEditor();
@@ -600,6 +766,7 @@ function renderEditor() {
   renderTemplates();
   renderPhotos();
   renderFindings();
+  renderEstimate();
   renderPreview();
 }
 
@@ -608,12 +775,24 @@ function renderEditor() {
    the preparer label and the signature line drop the inspector wording.
    The preview and the PDF read the same doc_type, so they never drift. */
 function updateDocTypeLabels() {
-  const isJob = $('#f_doc_type').value === 'job';
-  $('#f_inspector_name_label').textContent = isJob ? 'Prepared by' : 'Inspector name';
-  $('#f_inspection_date_label').textContent = isJob ? 'Job date' : 'Inspection date';
-  $('#f_inspector_name').placeholder = isJob
-    ? 'Alex Carter, Carter Plumbing Co.'
-    : 'Alex Carter, Licensed Inspector';
+  const type = $('#f_doc_type').value;
+  const isJob = type === 'job';
+  const isEstimate = type === 'estimate';
+  $('#f_inspector_name_label').textContent = isJob || isEstimate ? 'Prepared by' : 'Inspector name';
+  $('#f_inspection_date_label').textContent = isJob
+    ? 'Job date'
+    : isEstimate
+      ? 'Estimate date'
+      : 'Inspection date';
+  $('#f_inspector_name').placeholder =
+    isJob || isEstimate
+      ? 'Alex Carter, Carter Plumbing Co.'
+      : 'Alex Carter, Licensed Inspector';
+  // Estimate documents use the line-item editor instead of the
+  // findings composer and the summary box.
+  $('#findingsCard').classList.toggle('hidden', isEstimate);
+  $('#summaryCard').classList.toggle('hidden', isEstimate);
+  $('#estimateCard').classList.toggle('hidden', !isEstimate);
 }
 
 $('#f_doc_type').addEventListener('change', async () => {
@@ -623,7 +802,7 @@ $('#f_doc_type').addEventListener('change', async () => {
     method: 'PUT',
     body: JSON.stringify({ doc_type: $('#f_doc_type').value }),
   });
-  renderPreview();
+  renderEditor();
 });
 
 /* --- Property & client main fields: save on change --- */
@@ -656,6 +835,21 @@ function reportStats() {
 }
 
 function renderStats() {
+  if (state.current.report.doc_type === 'estimate') {
+    const items = state.current.estimateItems || [];
+    const t = estimateTotals(items, state.current.report);
+    const r = state.current.report;
+    let completeness = 0;
+    if ((r.address || '').trim() && (r.client_name || '').trim()) completeness += 50;
+    if (items.length) completeness += 50;
+    $('#statsRow').innerHTML = `
+    <div class="stat"><div class="stat-num">${items.length}</div><div class="stat-label">Line items</div></div>
+    <div class="stat"><div class="stat-num">${items.filter((i) => i.optional).length}</div><div class="stat-label">Optional</div></div>
+    <div class="stat"><div class="stat-num">${moneyC(t.total)}</div><div class="stat-label">Estimate total</div></div>
+    <div class="stat"><div class="stat-num">${completeness}%</div><div class="stat-label">Estimate complete</div>
+      <div class="completeness"><div style="width:${completeness}%"></div></div></div>`;
+    return;
+  }
   const s = reportStats();
   $('#statsRow').innerHTML = `
     <div class="stat"><div class="stat-num">${s.count}</div><div class="stat-label">Findings</div></div>
@@ -1175,6 +1369,396 @@ $('#summarizeBtn').addEventListener('click', async () => {
   $('#summaryBox').value = summary;
 });
 
+/* ---------------------------------------------------------------- */
+/* Estimate documents: line items, sections, totals                  */
+/* ---------------------------------------------------------------- */
+
+function renderEstimate() {
+  const wrap = $('#estimateItems');
+  if (!wrap || !state.current) return;
+  const items = state.current.estimateItems || [];
+  const sections = estimateSections(items);
+  const pbOptions = state.priceBook
+    .map(
+      (e) =>
+        `<option value="${e.id}">${esc(e.name)} — ${moneyC(e.unit_price)}${e.unit ? ` / ${esc(e.unit)}` : ''}</option>`
+    )
+    .join('');
+  wrap.innerHTML = items.length
+    ? sections
+        .map((sec) => {
+          const secTotal = round2(
+            sec.items.filter((i) => !i.optional).reduce((s, i) => s + lineTotal(i), 0)
+          );
+          return `
+      <div class="est-section">
+        <div class="est-section-head">
+          <input class="es-name" value="${esc(sec.name)}" placeholder="Section name — e.g. Plumbing" />
+          <span class="muted small">${moneyC(secTotal)}</span>
+        </div>
+        ${sec.items
+          .map(
+            (it) => `
+        <div class="est-item" data-item="${it.id}">
+          <input class="ei-desc" value="${esc(it.description)}" placeholder="Description — e.g. Replace leaking trap and supply lines" />
+          <select class="ei-kind">
+            ${['item', 'labor', 'material'].map((k) => `<option value="${k}" ${k === it.kind ? 'selected' : ''}>${KIND_LABEL[k]}</option>`).join('')}
+          </select>
+          <input class="ei-qty" type="number" min="0" step="0.25" value="${Number(it.qty || 0)}" title="Quantity" />
+          <input class="ei-unit" value="${esc(it.unit)}" placeholder="unit" title="Unit (hr, ea, sq ft…)" />
+          <input class="ei-price" type="number" min="0" step="0.01" value="${Number(it.unit_price || 0)}" title="Unit price $" />
+          <span class="ei-total">${moneyC(lineTotal(it))}</span>
+          <label class="ei-opt"><input type="checkbox" class="ei-optional" ${it.optional ? 'checked' : ''} /> Optional</label>
+          <button class="btn btn-white btn-sm" data-save-pb="${it.id}" title="Save this line to your price book">Save to price book</button>
+          <button class="btn btn-danger-ghost btn-sm" data-del-item="${it.id}">Delete</button>
+        </div>`
+          )
+          .join('')}
+        <div class="est-section-foot">
+          <button class="btn btn-navy btn-sm" data-add-item="${esc(sec.name)}">+ Add item</button>
+          ${
+            state.priceBook.length
+              ? `<select class="pb-pick" data-pb-section="${esc(sec.name)}"><option value="">+ Add from my price book…</option>${pbOptions}</select>`
+              : ''
+          }
+        </div>
+      </div>`;
+        })
+        .join('')
+    : '<p class="muted">No line items yet — add a section below to start (e.g. “Plumbing”), then add items to it.</p>';
+
+  const t = estimateTotals(items, state.current.report);
+  $('#estimateTotals').innerHTML = `
+    <div><span>Subtotal</span><b>${moneyC(t.subtotal)}</b></div>
+    ${t.discount ? `<div><span>Discount</span><b>−${moneyC(t.discount)}</b></div>` : ''}
+    ${t.tax ? `<div><span>Tax (${t.taxRate}%)</span><b>${moneyC(t.tax)}</b></div>` : ''}
+    <div class="est-grand"><span>Estimate total</span><b>${moneyC(t.total)}</b></div>
+    ${t.optionalSubtotal ? `<div><span>Optional items (not included in total)</span><b>${moneyC(t.optionalSubtotal)}</b></div>` : ''}
+    ${t.deposit ? `<div><span>Deposit due to schedule (${t.depositPct}%)</span><b>${moneyC(t.deposit)}</b></div>` : ''}`;
+
+  // Section rename: applies to every item in the section.
+  wrap.querySelectorAll('.est-section').forEach((secEl, idx) => {
+    const sec = sections[idx];
+    if (!sec) return;
+    const nameInput = secEl.querySelector('.es-name');
+    nameInput.addEventListener('change', async () => {
+      const name = nameInput.value.trim();
+      if (name === sec.name) return;
+      for (const it of sec.items) {
+        await api(`/api/items/${it.id}`, {
+          method: 'PUT',
+          body: JSON.stringify({ section: name }),
+        });
+      }
+      await refreshCurrent();
+    });
+  });
+
+  wrap.querySelectorAll('[data-item]').forEach((row) => {
+    const id = Number(row.dataset.item);
+    const payload = () => ({
+      description: row.querySelector('.ei-desc').value,
+      kind: row.querySelector('.ei-kind').value,
+      qty: Number(row.querySelector('.ei-qty').value) || 0,
+      unit: row.querySelector('.ei-unit').value,
+      unit_price: Number(row.querySelector('.ei-price').value) || 0,
+      optional: row.querySelector('.ei-optional').checked,
+    });
+    row
+      .querySelectorAll('.ei-desc,.ei-kind,.ei-qty,.ei-unit,.ei-price,.ei-optional')
+      .forEach((el) => {
+        el.addEventListener('change', async () => {
+          await api(`/api/items/${id}`, { method: 'PUT', body: JSON.stringify(payload()) });
+          await refreshCurrent();
+        });
+      });
+    row.querySelector('[data-save-pb]').addEventListener('click', async () => {
+      const p = payload();
+      if (!p.description.trim()) {
+        row.querySelector('.ei-desc').focus();
+        return;
+      }
+      await api('/api/price-book', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: p.description.trim(),
+          kind: p.kind,
+          unit: p.unit,
+          unit_price: p.unit_price,
+        }),
+      });
+      await loadPriceBook();
+    });
+  });
+  wrap.querySelectorAll('[data-del-item]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      await api(`/api/items/${btn.dataset.delItem}`, { method: 'DELETE' });
+      await refreshCurrent();
+    });
+  });
+  wrap.querySelectorAll('[data-add-item]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      if (!state.current) return;
+      const { item } = await api(`/api/reports/${state.current.report.id}/items`, {
+        method: 'POST',
+        body: JSON.stringify({ section: btn.dataset.addItem }),
+      });
+      await refreshCurrent();
+      if (item) {
+        const input = document.querySelector(`#estimateItems [data-item="${item.id}"] .ei-desc`);
+        if (input) {
+          input.scrollIntoView({ block: 'nearest' });
+          input.focus();
+        }
+      }
+    });
+  });
+  wrap.querySelectorAll('.pb-pick').forEach((sel) => {
+    sel.addEventListener('change', async () => {
+      const entry = state.priceBook.find((e) => e.id === Number(sel.value));
+      if (!entry || !state.current) return;
+      await api(`/api/reports/${state.current.report.id}/items`, {
+        method: 'POST',
+        body: JSON.stringify({
+          section: sel.dataset.pbSection,
+          description: entry.name,
+          kind: entry.kind,
+          qty: 1,
+          unit: entry.unit,
+          unit_price: entry.unit_price,
+        }),
+      });
+      await refreshCurrent();
+    });
+  });
+  renderEstTemplates();
+}
+
+/* Estimate detail fields (validity, discount, tax, deposit, texts):
+   save on change, same as the other report fields. */
+const EST_FIELD_MAP = {
+  e_valid_days: ['valid_days', true],
+  e_discount_value: ['discount_value', true],
+  e_discount_type: ['discount_type', false],
+  e_tax_rate: ['tax_rate', true],
+  e_deposit_pct: ['deposit_pct', true],
+  e_scope: ['scope_text', false],
+  e_exclusions: ['exclusions_text', false],
+  e_terms: ['terms_text', false],
+};
+for (const [id, [key, numeric]] of Object.entries(EST_FIELD_MAP)) {
+  const el = document.getElementById(id);
+  if (!el) continue;
+  el.addEventListener('change', async () => {
+    if (!state.current) return;
+    const body = {};
+    body[key] = numeric ? Number(el.value) || 0 : el.value;
+    state.current = await api(`/api/reports/${state.current.report.id}`, {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    });
+    renderStats();
+    renderEstimate();
+    renderPreview();
+  });
+}
+
+$('#addSectionBtn').addEventListener('click', async () => {
+  if (!state.current) return;
+  const input = $('#newSectionName');
+  const name = input.value.trim();
+  if (!name) {
+    input.focus();
+    return;
+  }
+  const { item } = await api(`/api/reports/${state.current.report.id}/items`, {
+    method: 'POST',
+    body: JSON.stringify({ section: name }),
+  });
+  input.value = '';
+  await refreshCurrent();
+  if (item) {
+    const desc = document.querySelector(`#estimateItems [data-item="${item.id}"] .ei-desc`);
+    if (desc) {
+      desc.scrollIntoView({ block: 'nearest' });
+      desc.focus();
+    }
+  }
+});
+
+/* --- Estimate templates (name only — same shape as report templates) --- */
+async function loadEstTemplates() {
+  try {
+    const { templates } = await api('/api/estimate-templates');
+    state.estTemplates = templates;
+  } catch (_) {
+    state.estTemplates = [];
+  }
+  renderEstTemplates();
+}
+
+function renderEstTemplates() {
+  const wrap = $('#estimateTemplateList');
+  if (!wrap) return;
+  if (!state.estTemplates.length) {
+    wrap.innerHTML = '';
+    return;
+  }
+  wrap.innerHTML = state.estTemplates
+    .map(
+      (t) => `
+      <div class="tpl-row">
+        <span class="tpl-title">${esc(t.name)}</span>
+        <span class="muted small">${t.itemCount} item${t.itemCount === 1 ? '' : 's'}</span>
+        <button class="btn btn-white btn-sm" data-apply-est-template="${t.id}">+ Add</button>
+        <button class="btn btn-danger-ghost btn-sm" data-del-est-template="${t.id}">Delete</button>
+      </div>`
+    )
+    .join('');
+  wrap.querySelectorAll('[data-apply-est-template]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      if (!state.current) return;
+      await api(`/api/reports/${state.current.report.id}/apply-estimate-template`, {
+        method: 'POST',
+        body: JSON.stringify({ templateId: Number(btn.dataset.applyEstTemplate) }),
+      });
+      await refreshCurrent();
+    });
+  });
+  wrap.querySelectorAll('[data-del-est-template]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      await api(`/api/estimate-templates/${btn.dataset.delEstTemplate}`, { method: 'DELETE' });
+      await loadEstTemplates();
+    });
+  });
+}
+
+$('#saveEstTemplateBtn').addEventListener('click', async () => {
+  if (!state.current) return;
+  const input = $('#etName');
+  const name = input.value.trim();
+  if (!name) {
+    input.focus();
+    return;
+  }
+  try {
+    await api('/api/estimate-templates', {
+      method: 'POST',
+      body: JSON.stringify({ name, reportId: state.current.report.id }),
+    });
+    input.value = '';
+    await loadEstTemplates();
+  } catch (err) {
+    window.alert(err.message);
+  }
+});
+
+/* Convert this estimate into a new Job Report (no confirm dialog —
+   the estimate itself is left untouched, so there is nothing to lose). */
+$('#convertJobBtn').addEventListener('click', async () => {
+  if (!state.current) return;
+  try {
+    const data = await api(`/api/reports/${state.current.report.id}/convert-to-job`, {
+      method: 'POST',
+      body: '{}',
+    });
+    state.current = data;
+    showEditor();
+    paintSaveStatus('saved', '✓ Converted — this is the new Job Report');
+  } catch (err) {
+    window.alert(err.message);
+  }
+});
+
+/* Valid-until date = estimate date + valid_days (estimate date falls
+   back to today when the date field is empty). pdf.js duplicates this. */
+function estimateValidUntil(report) {
+  const days = Number(report.valid_days || 0);
+  if (!days) return null;
+  const base = report.inspection_date
+    ? new Date(`${String(report.inspection_date).slice(0, 10)}T12:00:00`)
+    : new Date();
+  base.setDate(base.getDate() + days);
+  return base.toISOString().slice(0, 10);
+}
+
+/* --- Estimate preview (mirrors the PDF 1:1) --- */
+function renderEstimatePreview() {
+  const { report, customFields, estimateItems } = state.current;
+  const items = estimateItems || [];
+  const t = estimateTotals(items, report);
+  const validUntil = estimateValidUntil(report);
+  const rows = [
+    ['Client', report.client_name || '—'],
+    ['Date', report.inspection_date ? String(report.inspection_date).slice(0, 10) : '—'],
+    ['Prepared by', report.inspector_name || '—'],
+    ['Client email', report.client_email || '—'],
+    ['Client phone', report.client_phone || '—'],
+    ...(report.estimate_number ? [['Estimate #', report.estimate_number]] : []),
+    ...(validUntil ? [['Valid until', validUntil]] : []),
+    ...customFields.map((f) => [f.name || 'Field', f.value || '—']),
+  ];
+  const itemRow = (it) => `
+            <div class="r-item">
+              <div class="r-main">
+                <div class="r-line"><b>${esc(it.description || 'Line item')}</b><span class="est-amt">${moneyC(lineTotal(it))}</span></div>
+                <p class="r-detail">${esc(KIND_LABEL[it.kind] || 'Item')} · ${Number(it.qty || 0)}${it.unit ? ` ${esc(it.unit)}` : ''} × ${moneyC(it.unit_price)}</p>
+              </div>
+            </div>`;
+  const sections = estimateSections(items);
+  const billableSections = sections
+    .map((sec) => ({ name: sec.name, items: sec.items.filter((i) => !i.optional) }))
+    .filter((sec) => sec.items.length);
+  const optionalItems = items.filter((i) => i.optional);
+  $('#preview').innerHTML = `
+    <article class="report">
+      ${report.cover_url ? `<img class="report-cover" src="${esc(report.cover_url)}" alt="Property photo" />` : ''}
+      <div class="report-head">
+        <span class="badge">ESTIMATE</span>
+        <h1>${esc(report.address || 'Add a property address to start your estimate')}</h1>
+      </div>
+      <div class="report-body">
+        <dl class="meta">
+          ${rows.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}
+        </dl>
+        ${
+          billableSections.length
+            ? billableSections
+                .map(
+                  (sec) => `
+        ${sec.name ? `<h3>${esc(sec.name)}</h3>` : ''}
+        ${sec.items.map(itemRow).join('')}`
+                )
+                .join('')
+            : '<p class="r-empty">No line items yet — add sections and items on the left, and they will appear here grouped by section.</p>'
+        }
+        ${
+          optionalItems.length
+            ? `
+        <h3>Optional — not included in total</h3>
+        ${optionalItems.map(itemRow).join('')}
+        <p class="est-opt-total">Optional subtotal: ${moneyC(t.optionalSubtotal)}</p>`
+            : ''
+        }
+        <div class="est-totals">
+          <div><span>Subtotal</span><b>${moneyC(t.subtotal)}</b></div>
+          ${t.discount ? `<div><span>Discount</span><b>−${moneyC(t.discount)}</b></div>` : ''}
+          ${t.tax ? `<div><span>Tax (${t.taxRate}%)</span><b>${moneyC(t.tax)}</b></div>` : ''}
+          <div class="est-grand"><span>Total</span><b>${moneyC(t.total)}</b></div>
+          ${t.deposit ? `<div><span>Deposit due to schedule (${t.depositPct}%)</span><b>${moneyC(t.deposit)}</b></div>` : ''}
+        </div>
+        ${report.scope_text ? `<h3>Scope of work</h3><p class="est-text">${esc(report.scope_text)}</p>` : ''}
+        ${report.exclusions_text ? `<h3>Exclusions</h3><p class="est-text">${esc(report.exclusions_text)}</p>` : ''}
+        ${report.terms_text ? `<h3>Terms</h3><p class="est-text">${esc(report.terms_text)}</p>` : ''}
+        <div class="total-row">
+          <span>Customer approval: ___________________</span>
+          <span>Date: ____________</span>
+        </div>
+        ${companyBlockHtml(report)}
+      </div>
+    </article>`;
+}
+
 /* Company footer at the bottom of the report (replaces the old
    disclaimer): the preparer's company name, address, phone and email
    from their User Profile. Renders nothing when all are empty. */
@@ -1190,6 +1774,10 @@ function companyBlockHtml(report) {
 
 /* --- Preview (mirrors the approved report document look) --- */
 function renderPreview() {
+  if (state.current.report.doc_type === 'estimate') {
+    renderEstimatePreview();
+    return;
+  }
   const { report, customFields, findings } = state.current;
   const s = reportStats();
   const isJob = report.doc_type === 'job';
