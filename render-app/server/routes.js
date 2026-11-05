@@ -113,6 +113,15 @@ async function fullReport(userId, reportId) {
   report.discount_value = Number(report.discount_value || 0);
   report.tax_rate = Number(report.tax_rate || 0);
   report.valid_days = Number(report.valid_days || 30);
+  // Phase 1b sharing fields: same treatment.
+  report.share_enabled = Boolean(report.share_enabled);
+  report.view_count = Number(report.view_count || 0);
+  try {
+    const parsed = JSON.parse(report.approved_optionals || '[]');
+    report.approved_optionals = Array.isArray(parsed) ? parsed.map(Number) : [];
+  } catch (_) {
+    report.approved_optionals = [];
+  }
   return { report, customFields: fields.rows, findings, photos, estimateItems };
 }
 
@@ -1574,6 +1583,57 @@ router.post(
     }
     const data = await fullReport(req.user.id, newId);
     return res.status(201).json(data);
+  })
+);
+
+/* ------------------------------------------------------------------ */
+/* Estimate sharing (Phase 1b): owner side. The public page itself     */
+/* lives in server/share.js (GET /s/:token).                           */
+/* ------------------------------------------------------------------ */
+
+/* Turn the public share link on/off. The token is generated lazily on
+   first enable and then stays stable, so a link the owner already sent
+   keeps working across off/on toggles. */
+router.post(
+  '/reports/:id/share',
+  auth.requireAuth,
+  wrap(async (req, res) => {
+    const report = await ownReport(req.user.id, req.params.id);
+    if (!report) return res.status(404).json({ error: 'Report not found.' });
+    const enabled = Boolean(req.body && req.body.enabled);
+    let token = report.share_token || null;
+    if (enabled && !token) {
+      token = crypto.randomBytes(24).toString('base64url');
+    }
+    await db.query('UPDATE reports SET share_enabled = $1, share_token = $2 WHERE id = $3', [
+      enabled,
+      token,
+      report.id,
+    ]);
+    await touchReport(report.id);
+    return res.json({
+      share_token: token,
+      share_enabled: enabled,
+      share_path: token ? `/s/${token}` : null,
+    });
+  })
+);
+
+/* Owner marks the estimate as sent (they deliver the link themselves,
+   by text or email). Only draft/declined move to 'sent' — a viewed or
+   approved estimate keeps its further-along status. */
+router.post(
+  '/reports/:id/mark-sent',
+  auth.requireAuth,
+  wrap(async (req, res) => {
+    const report = await ownReport(req.user.id, req.params.id);
+    if (!report) return res.status(404).json({ error: 'Report not found.' });
+    if (['draft', 'declined'].includes(report.estimate_status || 'draft')) {
+      await db.query("UPDATE reports SET estimate_status = 'sent' WHERE id = $1", [report.id]);
+      await touchReport(report.id);
+    }
+    const data = await fullReport(req.user.id, report.id);
+    return res.json(data);
   })
 );
 
