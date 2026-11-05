@@ -83,6 +83,36 @@ function estimateSections(items) {
 
 const KIND_LABEL = { labor: 'Labor', material: 'Material', item: 'Item' };
 
+/* Commercial pack (Phase 2): findings can carry a cost horizon; when at
+   least one finding has a horizon AND a cost, the report gains a CAPEX
+   summary bucketing those costs by horizon. pdf.js duplicates this
+   math exactly (pdfCapexSummary) so the PDF matches the preview. */
+const CAPEX_BUCKETS = [
+  { key: 'immediate', label: 'Immediate' },
+  { key: '1-3', label: '1–3 years' },
+  { key: '3-5', label: '3–5 years' },
+  { key: '5-10', label: '5–10 years' },
+];
+
+function capexSummary(findings) {
+  const sums = { immediate: 0, '1-3': 0, '3-5': 0, '5-10': 0 };
+  let any = false;
+  for (const f of findings || []) {
+    const cost = Number(f.cost || 0);
+    if (f.horizon && sums[f.horizon] !== undefined && cost > 0) {
+      sums[f.horizon] += cost;
+      any = true;
+    }
+  }
+  if (!any) return null;
+  const rows = CAPEX_BUCKETS.filter((b) => sums[b.key] > 0).map((b) => ({
+    key: b.key,
+    label: b.label,
+    amount: round2(sums[b.key]),
+  }));
+  return { rows, total: round2(rows.reduce((s, r) => s + r.amount, 0)) };
+}
+
 /* --- Autosave status -----------------------------------------------
    There is no Save button anywhere in the editor — every field saves on
    change. The indicator in the editor header reflects REAL request
@@ -1001,7 +1031,9 @@ function renderTemplates() {
 
 $('#applyTemplateBtn').addEventListener('click', async () => {
   if (!state.current) return;
-  const templateId = Number($('#rtApplySelect').value);
+  // Value is a numeric id for user templates, or the built-in
+  // template's string id — pass it through as-is; the server branches.
+  const templateId = $('#rtApplySelect').value;
   if (!templateId) {
     $('#rtApplySelect').focus();
     return;
@@ -1026,8 +1058,12 @@ function renderRtPageList() {
       <div class="tpl-row">
         <span class="tpl-title">${esc(t.name)}</span>
         <span class="muted small">${t.fieldCount} field${t.fieldCount === 1 ? '' : 's'}</span>
-        <button class="btn btn-white btn-sm" data-edit-rt="${t.id}">Edit</button>
-        <button class="btn btn-danger-ghost btn-sm" data-del-rt="${t.id}">Delete</button>
+        ${
+          t.builtin
+            ? '<span class="muted small">Built-in</span>'
+            : `<button class="btn btn-white btn-sm" data-edit-rt="${t.id}">Edit</button>
+        <button class="btn btn-danger-ghost btn-sm" data-del-rt="${t.id}">Delete</button>`
+        }
       </div>`
         )
         .join('')
@@ -1263,6 +1299,15 @@ $('#photoInput').addEventListener('change', async (e) => {
 
 /* --- Findings --- */
 const SEVERITIES = ['Good', 'Monitor', 'Repair', 'Urgent'];
+/* Cost horizon (Phase 2 commercial pack): one compact select per
+   finding; empty = unset, and unset findings never show anywhere new. */
+const HORIZON_OPTIONS = [
+  { v: '', label: '—' },
+  { v: 'immediate', label: 'Immediate' },
+  { v: '1-3', label: '1–3 yrs' },
+  { v: '3-5', label: '3–5 yrs' },
+  { v: '5-10', label: '5–10 yrs' },
+];
 // Findings that already auto-opened a successor card (once per finding per session).
 const autoSpawnedFor = new Set();
 
@@ -1290,6 +1335,10 @@ function renderFindings() {
             </select></label>
           <label class="field-inline"><span>Est. cost $</span>
             <input class="f-cost" type="number" min="0" step="1" value="${Number(f.cost || 0)}" /></label>
+          <label class="field-inline"><span>Horizon</span>
+            <select class="f-horizon">
+              ${HORIZON_OPTIONS.map((h) => `<option value="${h.v}" ${h.v === (f.horizon || '') ? 'selected' : ''}>${h.label}</option>`).join('')}
+            </select></label>
           <button class="btn btn-amber btn-sm" data-polish="${f.id}">✨ Polish</button>
           <button class="btn btn-danger-ghost btn-sm" data-del-finding="${f.id}">Delete</button>
         </div>
@@ -1315,6 +1364,7 @@ function renderFindings() {
       detail: card.querySelector('.f-detail').value,
       severity: card.querySelector('.f-severity').value,
       cost: Number(card.querySelector('.f-cost').value) || 0,
+      horizon: card.querySelector('.f-horizon').value || null,
     });
     const save = async () => {
       const p = payload();
@@ -1343,7 +1393,7 @@ function renderFindings() {
         }
       }
     };
-    card.querySelectorAll('.f-area,.f-title,.f-detail,.f-severity,.f-cost').forEach((el) => {
+    card.querySelectorAll('.f-area,.f-title,.f-detail,.f-severity,.f-cost,.f-horizon').forEach((el) => {
       el.addEventListener('change', save);
     });
     card.querySelector('[data-polish]').addEventListener('click', async () => {
@@ -2189,6 +2239,7 @@ function renderPreview() {
   }
   const { report, customFields, findings } = state.current;
   const s = reportStats();
+  const capex = capexSummary(findings);
   const isJob = report.doc_type === 'job';
   const rows = [
     ['Client', report.client_name || '—'],
@@ -2239,6 +2290,19 @@ function renderPreview() {
           <span>Total estimated repairs: <b>${money(s.total)}</b></span>
           <span>${isJob ? 'Signature' : 'Inspector signature'}: ___________________</span>
         </div>
+        ${
+          capex
+            ? `
+        <h3>Capital expenditure summary</h3>
+        <table class="capex-table">
+          <thead><tr><th>Horizon</th><th class="r">Estimated cost</th></tr></thead>
+          <tbody>
+            ${capex.rows.map((r) => `<tr><td>${esc(r.label)}</td><td class="r">${money(r.amount)}</td></tr>`).join('')}
+            <tr class="capex-total"><td>Total</td><td class="r">${money(capex.total)}</td></tr>
+          </tbody>
+        </table>`
+            : ''
+        }
         ${companyBlockHtml(report)}
       </div>
     </article>`;
