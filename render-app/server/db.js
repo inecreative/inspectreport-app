@@ -120,6 +120,11 @@ const SCHEMA = [
      sort_order INTEGER NOT NULL DEFAULT 0,
      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
    )`,
+  /* Commercial pack (Phase 2): when a finding's work is expected to be
+     needed — 'immediate' | '1-3' | '3-5' | '5-10', NULL when unset (the
+     residential flow never touches it). Drives the auto CAPEX summary
+     in the preview/PDF. Must run AFTER the findings table exists. */
+  `ALTER TABLE findings ADD COLUMN IF NOT EXISTS horizon TEXT`,
   `CREATE TABLE IF NOT EXISTS photos (
      id SERIAL PRIMARY KEY,
      report_id INTEGER NOT NULL REFERENCES reports(id) ON DELETE CASCADE,
