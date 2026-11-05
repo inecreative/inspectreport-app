@@ -700,3 +700,96 @@ select.sev-Urgent { color: var(--red); font-weight: 700; }
   margin-top: 22px;
 }
 .decline-form input { flex: 1 1 220px; }
+
+/* === Editor section clarity (2026-11-05) ===
+   Form-column only: every rule below is anchored under #editorView
+   .editor-col. The live preview (.report lives in .preview-wrap, outside
+   .editor-col) and the PDF can never match these selectors, and the
+   Profile / Templates / public share pages have no #editorView at all.
+   CSS-only change: no DOM, id, class or data-* hook is touched.
+   Section numbers come from a CSS counter on the card h2s. Cards hidden
+   per doc type carry .hidden (display:none), generate no box and so
+   never consume a number:
+     inspection -> Property 1 · Photos 2 · Findings 3 · Summary 4
+     estimate   -> Property 1 · Photos 2 · Estimate 3              */
+#editorView .editor-col { counter-reset: editor-section; }
+
+/* Section cards: a crisper slate border + deeper shadow separates the
+   white cards from the white page; even padding and gap rhythm. */
+#editorView .editor-col > .card {
+  border-color: #E2E8F0;
+  box-shadow: 0 1px 2px rgba(15, 42, 61, .05), 0 10px 28px rgba(15, 42, 61, .08);
+  padding: 24px;
+  margin-bottom: 24px;
+}
+
+/* Section headers: amber number chip + title + divider rule. The header
+   sticks just under the app header while its (possibly long) card
+   scrolls, so the section being edited is always named on screen.
+   No ancestor of the cards clips overflow, so sticky is safe here. */
+#editorView .editor-col > .card > h2 {
+  position: sticky;
+  top: 84px;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  background: #fff;
+  margin: 0 0 18px;
+  padding: 8px 0 12px;
+  border-bottom: 2px solid #E2E8F0;
+}
+#editorView .editor-col > .card > h2::before {
+  counter-increment: editor-section;
+  content: counter(editor-section);
+  flex: none;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  background: var(--amber);
+  color: #fff;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1;
+}
+@media (max-width: 640px) {
+  /* The app header shrinks to 68px tall on small screens. */
+  #editorView .editor-col > .card > h2 { top: 68px; }
+}
+
+/* Sub-sections inside a card (Custom fields, Line items,
+   Share with your client...): small-caps slate label + hairline. */
+#editorView .editor-col .subhead {
+  font-size: 13.5px;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: #64748B;
+  border-top: 1.5px solid #E2E8F0;
+  padding-top: 16px;
+  margin: 26px 0 12px;
+}
+/* The Photos card's cover-photo label sits directly under the section
+   header — it keeps the label look but drops the divider. */
+#editorView .editor-col .cover-block .subhead {
+  border-top: 0;
+  padding-top: 0;
+  margin-top: 0;
+}
+
+/* Repeated blocks: finding cards and estimate section groups sit on a
+   light slate panel so long lists read as separate blocks; the fields
+   inside stay white. Each estimate line row gets its own white tile
+   inside the tinted group. */
+#editorView .editor-col .finding,
+#editorView .editor-col .est-section {
+  background: #F8FAFC;
+  border-color: #E2E8F0;
+}
+#editorView .editor-col .est-item {
+  background: #fff;
+  border: 1.5px solid #E2E8F0;
+  border-radius: 8px;
+  padding: 10px;
+}
