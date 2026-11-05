@@ -41,8 +41,73 @@ function pdfMoney(n) {
   return `$${Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
 }
 
-function pdfFilename(address, isJob) {
-  const kind = isJob ? 'job-report' : 'inspection-report';
+/* --- Estimate helpers: exact duplicates of the math in app.js
+   (estimateTotals / lineTotal / estimateSections / estimateValidUntil)
+   so the printed estimate always matches the preview. --- */
+function pdfMoneyC(n) {
+  return `$${Number(n || 0).toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+function pdfRound2(n) {
+  return Math.round(Number(n || 0) * 100) / 100;
+}
+
+function pdfLineTotal(it) {
+  return pdfRound2(Number(it.qty || 0) * Number(it.unit_price || 0));
+}
+
+function pdfEstimateTotals(items, report) {
+  const list = items || [];
+  const subtotal = pdfRound2(
+    list.filter((i) => !i.optional).reduce((s, i) => s + pdfLineTotal(i), 0)
+  );
+  const optionalSubtotal = pdfRound2(
+    list.filter((i) => i.optional).reduce((s, i) => s + pdfLineTotal(i), 0)
+  );
+  const dv = Number(report.discount_value || 0);
+  const discount = pdfRound2(
+    report.discount_type === 'amt' ? Math.min(dv, subtotal) : (subtotal * dv) / 100
+  );
+  const taxable = pdfRound2(subtotal - discount);
+  const taxRate = Number(report.tax_rate || 0);
+  const tax = pdfRound2((taxable * taxRate) / 100);
+  const total = pdfRound2(taxable + tax);
+  const depositPct = Number(report.deposit_pct || 0);
+  const deposit = pdfRound2((total * depositPct) / 100);
+  return { subtotal, optionalSubtotal, discount, taxable, taxRate, tax, total, depositPct, deposit };
+}
+
+const PDF_KIND_LABEL = { labor: 'Labor', material: 'Material', item: 'Item' };
+
+function pdfEstimateSections(items) {
+  const order = [];
+  const map = new Map();
+  for (const it of items || []) {
+    const name = it.section || '';
+    if (!map.has(name)) {
+      map.set(name, []);
+      order.push(name);
+    }
+    map.get(name).push(it);
+  }
+  return order.map((name) => ({ name, items: map.get(name) }));
+}
+
+function pdfValidUntil(report) {
+  const days = Number(report.valid_days || 0);
+  if (!days) return null;
+  const base = report.inspection_date
+    ? new Date(`${String(report.inspection_date).slice(0, 10)}T12:00:00`)
+    : new Date();
+  base.setDate(base.getDate() + days);
+  return base.toISOString().slice(0, 10);
+}
+
+function pdfFilename(address, isJob, isEstimate) {
+  const kind = isEstimate ? 'estimate' : isJob ? 'job-report' : 'inspection-report';
   const base = String(address || kind)
     .replace(/[^\w\s-]/g, '')
     .trim()
@@ -121,6 +186,10 @@ function coverCroppedDataUrl(dataUrl, targetW, targetH) {
 async function downloadReportPdf(data, setStatus) {
   if (!window.jspdf || !window.jspdf.jsPDF) {
     setStatus('PDF library failed to load — check your connection and try again.');
+    return;
+  }
+  if (data && data.report && data.report.doc_type === 'estimate') {
+    await downloadEstimatePdf(data, setStatus);
     return;
   }
   const { report, customFields, findings, profile } = data;
@@ -452,6 +521,331 @@ async function downloadReportPdf(data, setStatus) {
     }
 
     doc.save(pdfFilename(report.address, isJob));
+    setStatus('✓ PDF downloaded');
+    setTimeout(() => setStatus(''), 5000);
+  } catch (err) {
+    console.error(err);
+    setStatus('PDF failed — please try again.');
+  }
+}
+
+/**
+ * Estimate PDF — a 1:1 port of app.js renderEstimatePreview: navy
+ * header with the amber ESTIMATE badge, meta grid (incl. estimate
+ * number + valid-until), line items grouped by section with amounts,
+ * the optional block (excluded from the total), the totals box,
+ * scope / exclusions / terms, the deposit line, approval signature
+ * lines, and the company footer.
+ */
+async function downloadEstimatePdf(data, setStatus) {
+  const { report, customFields, estimateItems, profile } = data;
+  const items = estimateItems || [];
+  setStatus('Building PDF…');
+  try {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: 'pt', format: 'letter' });
+    const pageW = doc.internal.pageSize.getWidth();
+    const pageH = doc.internal.pageSize.getHeight();
+    const margin = 48;
+    const contentW = pageW - margin * 2;
+    const bodyX = margin + 18;
+    const bodyW = contentW - 36;
+    const topY = 44;
+    const bottomY = pageH - 46;
+    let y = topY;
+
+    const ensureSpace = (needed) => {
+      if (y + needed > bottomY) {
+        doc.addPage();
+        y = topY;
+      }
+    };
+    const setColor = (rgb) => doc.setTextColor(rgb[0], rgb[1], rgb[2]);
+    const fillColor = (rgb) => doc.setFillColor(rgb[0], rgb[1], rgb[2]);
+
+    /* ---------- House photo (report cover) ---------- */
+    let hasCover = false;
+    if (report.cover_url) {
+      try {
+        const { dataUrl } = await imageToDataUrl(report.cover_url);
+        const cover = await coverCroppedDataUrl(dataUrl, contentW, 138);
+        doc.addImage(cover, 'JPEG', margin, y, contentW, 138);
+        y += 138;
+        hasCover = true;
+      } catch (_) {
+        /* skip a cover that cannot be loaded */
+      }
+    }
+
+    /* ---------- Header block ---------- */
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(19.5);
+    const addrLines = doc.splitTextToSize(
+      report.address || 'Add a property address to start your estimate',
+      bodyW
+    );
+    const headH = 13 + 17 + 9 + addrLines.length * 23 + 15;
+    fillColor(C.navy);
+    if (hasCover) {
+      doc.rect(margin, y, contentW, headH, 'F');
+    } else {
+      doc.roundedRect(margin, y, contentW, headH, 7, 7, 'F');
+    }
+    const badgeText = 'ESTIMATE';
+    const badgeCharSpace = 0.5;
+    doc.setFontSize(8.5);
+    doc.setCharSpace(badgeCharSpace);
+    const badgeW = doc.getTextWidth(badgeText) + badgeText.length * badgeCharSpace + 22;
+    fillColor(C.badgeAmber);
+    doc.roundedRect(bodyX, y + 13, badgeW, 17, 4, 4, 'F');
+    doc.setTextColor(17, 24, 39);
+    doc.text(badgeText, bodyX + badgeW / 2, y + 13 + 12, { align: 'center' });
+    doc.setCharSpace(0);
+    doc.setFontSize(19.5);
+    setColor([255, 255, 255]);
+    let ty = y + 13 + 17 + 9 + 17;
+    for (const line of addrLines) {
+      doc.text(line, bodyX, ty);
+      ty += 23;
+    }
+    y += headH + 20;
+
+    /* ---------- Meta grid ---------- */
+    const validUntil = pdfValidUntil(report);
+    const rows = [
+      ['Client', report.client_name || '—'],
+      ['Date', report.inspection_date ? String(report.inspection_date).slice(0, 10) : '—'],
+      ['Prepared by', report.inspector_name || '—'],
+      ['Client email', report.client_email || '—'],
+      ['Client phone', report.client_phone || '—'],
+      ...(report.estimate_number ? [['Estimate #', report.estimate_number]] : []),
+      ...(validUntil ? [['Valid until', validUntil]] : []),
+      ...customFields.map((f) => [f.name || 'Field', f.value || '—']),
+    ];
+    const colGap = 14;
+    const colW = (bodyW - colGap) / 2;
+    for (let i = 0; i < rows.length; i += 2) {
+      const cells = rows.slice(i, i + 2).map(([label, value]) => {
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(11);
+        const valueLines = doc.splitTextToSize(String(value), colW);
+        return { label, valueLines, h: 11 + valueLines.length * 13.5 };
+      });
+      const rowH = Math.max(...cells.map((c) => c.h));
+      ensureSpace(rowH + 10);
+      cells.forEach((cell, j) => {
+        const cx = bodyX + j * (colW + colGap);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(8);
+        doc.setCharSpace(0.9);
+        setColor(C.metaLabel);
+        doc.text(String(cell.label).toUpperCase(), cx, y + 8);
+        doc.setCharSpace(0);
+        doc.setFontSize(11);
+        setColor(C.ink);
+        let vy = y + 8 + 14;
+        for (const line of cell.valueLines) {
+          doc.text(line, cx, vy);
+          vy += 13.5;
+        }
+      });
+      y += rowH + 10;
+    }
+    doc.setDrawColor(C.line[0], C.line[1], C.line[2]);
+    doc.setLineWidth(1.1);
+    doc.line(bodyX, y - 2, bodyX + bodyW, y - 2);
+    y += 14;
+
+    const heading = (text) => {
+      ensureSpace(30);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(11.5);
+      doc.setCharSpace(1);
+      setColor(C.navy);
+      doc.text(text, bodyX, y + 11);
+      doc.setCharSpace(0);
+      y += 26;
+    };
+
+    /* ---------- Line items ---------- */
+    const t = pdfEstimateTotals(items, report);
+    const drawItem = (it) => {
+      const amt = pdfMoneyC(pdfLineTotal(it));
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10.5);
+      const amtW = doc.getTextWidth(amt);
+      doc.setFontSize(11.5);
+      const descLines = doc.splitTextToSize(it.description || 'Line item', bodyW - amtW - 12);
+      ensureSpace(descLines.length * 15 + 22);
+      setColor(C.ink);
+      let ly = y + 11.5;
+      descLines.forEach((line, li) => {
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(11.5);
+        doc.text(line, bodyX, ly);
+        if (li === 0) {
+          doc.setFontSize(10.5);
+          doc.text(amt, bodyX + bodyW - amtW, ly);
+        }
+        ly += 15;
+      });
+      y += descLines.length * 15;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10.6);
+      setColor(C.ink);
+      const sub = `${PDF_KIND_LABEL[it.kind] || 'Item'} · ${Number(it.qty || 0)}${it.unit ? ` ${it.unit}` : ''} × ${pdfMoneyC(it.unit_price)}`;
+      ensureSpace(15.5);
+      doc.text(sub, bodyX, y + 10.6);
+      y += 17.5;
+    };
+    const drawSeparator = () => {
+      y += 4;
+      ensureSpace(16);
+      doc.setDrawColor(C.itemLine[0], C.itemLine[1], C.itemLine[2]);
+      doc.setLineWidth(0.8);
+      doc.line(bodyX, y, bodyX + bodyW, y);
+      y += 12;
+    };
+
+    const sections = pdfEstimateSections(items);
+    const billableSections = sections
+      .map((sec) => ({ name: sec.name, items: sec.items.filter((i) => !i.optional) }))
+      .filter((sec) => sec.items.length);
+    const optionalItems = items.filter((i) => i.optional);
+
+    if (!billableSections.length && !optionalItems.length) {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10.5);
+      setColor(C.metaLabel);
+      doc.text(
+        'No line items yet — add sections and items on the left, and they will appear here grouped by section.',
+        bodyX,
+        y + 11
+      );
+      y += 24;
+    }
+    billableSections.forEach((sec) => {
+      if (sec.name) heading(sec.name.toUpperCase());
+      sec.items.forEach((it, idx) => {
+        drawItem(it);
+        if (idx < sec.items.length - 1) drawSeparator();
+      });
+      y += 4;
+    });
+    if (optionalItems.length) {
+      heading('OPTIONAL — NOT INCLUDED IN TOTAL');
+      optionalItems.forEach((it, idx) => {
+        drawItem(it);
+        if (idx < optionalItems.length - 1) drawSeparator();
+      });
+      y += 2;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10.8);
+      setColor(C.ink);
+      doc.text('Optional subtotal: ', bodyX, y + 10.8);
+      const lblW = doc.getTextWidth('Optional subtotal: ');
+      doc.setFont('helvetica', 'bold');
+      doc.text(pdfMoneyC(t.optionalSubtotal), bodyX + lblW, y + 10.8);
+      y += 20;
+    }
+
+    /* ---------- Totals box ---------- */
+    ensureSpace(110);
+    y += 8;
+    doc.setDrawColor(C.line[0], C.line[1], C.line[2]);
+    doc.setLineWidth(1.1);
+    doc.line(bodyX, y, bodyX + bodyW, y);
+    y += 8;
+    const totalRow = (label, value, grand) => {
+      ensureSpace(grand ? 26 : 20);
+      y += grand ? 17 : 14;
+      doc.setFont('helvetica', grand ? 'bold' : 'normal');
+      doc.setFontSize(grand ? 13.5 : 10.8);
+      setColor(C.ink);
+      doc.text(label, bodyX, y);
+      doc.setFont('helvetica', 'bold');
+      const vw = doc.getTextWidth(value);
+      doc.text(value, bodyX + bodyW - vw, y);
+      y += 7;
+    };
+    totalRow('Subtotal', pdfMoneyC(t.subtotal), false);
+    if (t.discount) totalRow('Discount', `−${pdfMoneyC(t.discount)}`, false);
+    if (t.tax) totalRow(`Tax (${t.taxRate}%)`, pdfMoneyC(t.tax), false);
+    totalRow('Total', pdfMoneyC(t.total), true);
+    if (t.deposit) {
+      totalRow(`Deposit due to schedule (${t.depositPct}%)`, pdfMoneyC(t.deposit), false);
+    }
+    y += 6;
+
+    /* ---------- Scope / Exclusions / Terms ---------- */
+    const textSection = (title, text) => {
+      if (!text || !String(text).trim()) return;
+      heading(title);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10.8);
+      setColor(C.ink);
+      for (const para of String(text).split('\n')) {
+        if (!para.trim()) {
+          y += 8;
+          continue;
+        }
+        for (const line of doc.splitTextToSize(para, bodyW)) {
+          ensureSpace(15.8);
+          doc.text(line, bodyX, y + 10.8);
+          y += 15.8;
+        }
+      }
+      y += 6;
+    };
+    textSection('SCOPE OF WORK', report.scope_text);
+    textSection('EXCLUSIONS', report.exclusions_text);
+    textSection('TERMS', report.terms_text);
+
+    /* ---------- Approval signature lines ---------- */
+    ensureSpace(64);
+    y += 8;
+    doc.setDrawColor(C.line[0], C.line[1], C.line[2]);
+    doc.setLineWidth(1.1);
+    doc.line(bodyX, y, bodyX + bodyW, y);
+    y += 19;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    setColor(C.metaLabel);
+    doc.text('Customer approval: ___________________', bodyX, y);
+    const dateText = 'Date: ____________';
+    doc.text(dateText, bodyX + bodyW - doc.getTextWidth(dateText), y);
+    y += 12;
+
+    /* ---------- Company footer ---------- */
+    const coName =
+      (profile && profile.companyName) || report.inspector_name || (profile && profile.fullName) || '';
+    const coLine = [
+      profile && profile.companyAddress,
+      profile && profile.phone,
+      profile && profile.email,
+    ]
+      .filter((v) => v && String(v).trim())
+      .join(' · ');
+    if (coName) {
+      ensureSpace(16);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10.5);
+      setColor(C.ink);
+      doc.text(coName, bodyX, y + 10.5);
+      y += 15;
+    }
+    if (coLine) {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      setColor(C.disclaimer);
+      for (const line of doc.splitTextToSize(coLine, bodyW)) {
+        ensureSpace(12);
+        doc.text(line, bodyX, y + 9);
+        y += 12;
+      }
+    }
+
+    doc.save(pdfFilename(report.address, false, true));
     setStatus('✓ PDF downloaded');
     setTimeout(() => setStatus(''), 5000);
   } catch (err) {
