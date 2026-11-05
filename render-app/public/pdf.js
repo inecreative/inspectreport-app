@@ -80,6 +80,34 @@ function pdfEstimateTotals(items, report) {
   return { subtotal, optionalSubtotal, discount, taxable, taxRate, tax, total, depositPct, deposit };
 }
 
+/* --- CAPEX summary (Phase 2 commercial pack): exact duplicate of
+   app.js capexSummary so the printed report matches the preview. --- */
+const PDF_CAPEX_BUCKETS = [
+  { key: 'immediate', label: 'Immediate' },
+  { key: '1-3', label: '1–3 years' },
+  { key: '3-5', label: '3–5 years' },
+  { key: '5-10', label: '5–10 years' },
+];
+
+function pdfCapexSummary(findings) {
+  const sums = { immediate: 0, '1-3': 0, '3-5': 0, '5-10': 0 };
+  let any = false;
+  for (const f of findings || []) {
+    const cost = Number(f.cost || 0);
+    if (f.horizon && sums[f.horizon] !== undefined && cost > 0) {
+      sums[f.horizon] += cost;
+      any = true;
+    }
+  }
+  if (!any) return null;
+  const rows = PDF_CAPEX_BUCKETS.filter((b) => sums[b.key] > 0).map((b) => ({
+    key: b.key,
+    label: b.label,
+    amount: pdfRound2(sums[b.key]),
+  }));
+  return { rows, total: pdfRound2(rows.reduce((s, r) => s + r.amount, 0)) };
+}
+
 const PDF_KIND_LABEL = { labor: 'Labor', material: 'Material', item: 'Item' };
 
 function pdfEstimateSections(items) {
@@ -490,6 +518,47 @@ async function downloadReportPdf(data, setStatus) {
     const sigText = `${isJob ? 'Signature' : 'Inspector signature'}: ___________________`;
     doc.text(sigText, bodyX + bodyW - doc.getTextWidth(sigText), y);
     y += 12;
+
+    /* ---------- CAPEX summary (Phase 2: only when a finding has a
+       horizon + cost; otherwise the report is unchanged) ---------- */
+    const capex = pdfCapexSummary(findings);
+    if (capex) {
+      y += 10;
+      heading('CAPITAL EXPENDITURE SUMMARY');
+      const rowH = 20;
+      ensureSpace(rowH + 4);
+      fillColor(C.navy);
+      doc.rect(bodyX, y, bodyW, rowH, 'F');
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9.5);
+      setColor([255, 255, 255]);
+      doc.text('HORIZON', bodyX + 8, y + 13.5);
+      const chText = 'ESTIMATED COST';
+      doc.text(chText, bodyX + bodyW - 8 - doc.getTextWidth(chText), y + 13.5);
+      y += rowH;
+      const drawCapexRow = (label, amount, isTotal) => {
+        ensureSpace(rowH + 2);
+        if (isTotal) {
+          fillColor(C.navy);
+          doc.rect(bodyX, y, bodyW, rowH, 'F');
+        }
+        doc.setFont('helvetica', isTotal ? 'bold' : 'normal');
+        doc.setFontSize(10.5);
+        setColor(isTotal ? [255, 255, 255] : C.ink);
+        doc.text(label, bodyX + 8, y + 14);
+        const amt = pdfMoney(amount);
+        doc.text(amt, bodyX + bodyW - 8 - doc.getTextWidth(amt), y + 14);
+        if (!isTotal) {
+          doc.setDrawColor(C.line[0], C.line[1], C.line[2]);
+          doc.setLineWidth(0.8);
+          doc.line(bodyX, y + rowH, bodyX + bodyW, y + rowH);
+        }
+        y += rowH;
+      };
+      for (const r of capex.rows) drawCapexRow(r.label, r.amount, false);
+      drawCapexRow('Total', capex.total, true);
+      y += 6;
+    }
 
     /* ---------- Company footer (replaces the old disclaimer) ---------- */
     const coName =
