@@ -241,6 +241,7 @@ h1 { font-family: Archivo, sans-serif; font-size: 28px; font-weight: 800; letter
   outline: none;
 }
 .field textarea, .finding textarea { resize: vertical; }
+.field > span .est-polish-btn { margin-left: 8px; text-transform: none; letter-spacing: normal; }
 .field input:focus, .field textarea:focus, .field select:focus,
 .inline-input:focus, .finding input:focus, .finding textarea:focus, .finding select:focus,
 .cf-row input:focus, .tpl-row input:focus, .field-inline select:focus {
