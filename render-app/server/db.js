@@ -220,6 +220,23 @@ const SCHEMA = [
   `ALTER TABLE users ADD COLUMN IF NOT EXISTS est_exclusions TEXT NOT NULL DEFAULT ''`,
   `ALTER TABLE users ADD COLUMN IF NOT EXISTS est_valid_days INTEGER NOT NULL DEFAULT 30`,
   `ALTER TABLE users ADD COLUMN IF NOT EXISTS est_deposit_pct NUMERIC NOT NULL DEFAULT 0`,
+  /* Estimate sharing (Phase 1b): a public, unguessable share link per
+     report with view tracking and customer approval. share_token is
+     generated lazily the first time the owner turns the link on.
+     estimate_status: 'draft' | 'sent' | 'viewed' | 'approved' |
+     'declined' (estimate documents only). approved_optionals holds a
+     JSON array of the estimate_items ids the customer chose to include
+     when approving. Must run AFTER the reports table exists. */
+  `ALTER TABLE reports ADD COLUMN IF NOT EXISTS share_token TEXT`,
+  `ALTER TABLE reports ADD COLUMN IF NOT EXISTS share_enabled BOOLEAN NOT NULL DEFAULT false`,
+  `ALTER TABLE reports ADD COLUMN IF NOT EXISTS estimate_status TEXT NOT NULL DEFAULT 'draft'`,
+  `ALTER TABLE reports ADD COLUMN IF NOT EXISTS viewed_at TIMESTAMPTZ`,
+  `ALTER TABLE reports ADD COLUMN IF NOT EXISTS view_count INTEGER NOT NULL DEFAULT 0`,
+  `ALTER TABLE reports ADD COLUMN IF NOT EXISTS approved_name TEXT`,
+  `ALTER TABLE reports ADD COLUMN IF NOT EXISTS approved_at TIMESTAMPTZ`,
+  `ALTER TABLE reports ADD COLUMN IF NOT EXISTS approved_optionals TEXT`,
+  `ALTER TABLE reports ADD COLUMN IF NOT EXISTS declined_at TIMESTAMPTZ`,
+  `ALTER TABLE reports ADD COLUMN IF NOT EXISTS declined_reason TEXT`,
 ];
 
 async function init() {
