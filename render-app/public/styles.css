@@ -505,6 +505,13 @@ select.sev-Urgent { color: var(--red); font-weight: 700; }
   color: #6B7280;
 }
 .total-row b { color: #111827; }
+/* CAPEX summary (Phase 2 commercial pack): renders in the report
+   document only when a finding carries a horizon + cost. */
+.capex-table { width: 100%; border-collapse: collapse; margin: 10px 0 4px; font-size: 14.5px; }
+.capex-table th { background: var(--navy); color: #fff; text-align: left; padding: 8px 10px; font-size: 13px; letter-spacing: .04em; }
+.capex-table th.r, .capex-table td.r { text-align: right; }
+.capex-table td { padding: 8px 10px; border-bottom: 1px solid #E5E7EB; color: #111827; }
+.capex-table tr.capex-total td { background: var(--navy); color: #fff; font-weight: 800; border-bottom: none; }
 .report-company { margin: 14px 0 0; }
 .report-company .rc-name { font-family: Archivo, sans-serif; font-size: 14.5px; font-weight: 800; color: var(--navy); margin: 0; }
 .report-company .rc-line { font-size: 12.5px; color: #6B7280; margin: 2px 0 0; }
