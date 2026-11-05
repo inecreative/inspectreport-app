@@ -46,8 +46,21 @@ const upload = multer({
 /* Helpers                                                             */
 /* ------------------------------------------------------------------ */
 
+/* Commercial pack (Phase 2): a finding's cost horizon. Anything else
+   (including undefined/'') normalizes to NULL = unset. */
+const HORIZONS = ['immediate', '1-3', '3-5', '5-10'];
+
+function cleanHorizon(v) {
+  return HORIZONS.includes(v) ? v : null;
+}
+
 function shapeFinding(row) {
-  return { ...row, cost: Number(row.cost || 0), photos: [] };
+  return {
+    ...row,
+    cost: Number(row.cost || 0),
+    horizon: cleanHorizon(row.horizon),
+    photos: [],
+  };
 }
 
 function shapeEstimateItem(row) {
@@ -952,6 +965,44 @@ router.delete(
   })
 );
 
+/* Built-in report template (Phase 2 commercial pack): a building
+   profile field set that ships with the product. It is merged into
+   every user's templates list — never stored in the user's template
+   tables — and it cannot be edited or deleted (PUT/DELETE return
+   400). Applying it works like any template: fields are appended,
+   duplicate labels skipped. Labels only, values empty. */
+const BUILTIN_REPORT_TEMPLATE = {
+  id: 'builtin-commercial-profile',
+  name: 'Commercial building profile',
+  fields: [
+    'Building type',
+    'Year built',
+    'Stories',
+    'Gross area (sq ft)',
+    'Construction',
+    'Roof type & age',
+    'HVAC type & age',
+    'Parking',
+    'Occupancy',
+  ].map((name) => ({ name, value: '' })),
+};
+
+function builtinTemplateJson() {
+  return {
+    id: BUILTIN_REPORT_TEMPLATE.id,
+    name: BUILTIN_REPORT_TEMPLATE.name,
+    builtin: true,
+    fields: BUILTIN_REPORT_TEMPLATE.fields.map((f, i) => ({
+      id: null,
+      template_id: BUILTIN_REPORT_TEMPLATE.id,
+      name: f.name,
+      value: f.value,
+      sort_order: i,
+    })),
+    fieldCount: BUILTIN_REPORT_TEMPLATE.fields.length,
+  };
+}
+
 router.get(
   '/report-templates',
   auth.requireAuth,
@@ -968,6 +1019,7 @@ router.get(
       );
       out.push({ ...t, fields, fieldCount: fields.length });
     }
+    out.push(builtinTemplateJson());
     return res.json({ templates: out });
   })
 );
@@ -1035,15 +1087,22 @@ router.post(
   wrap(async (req, res) => {
     const report = await ownReport(req.user.id, req.params.id);
     if (!report) return res.status(404).json({ error: 'Report not found.' });
-    const { rows: trows } = await db.query(
-      'SELECT * FROM report_templates WHERE id = $1 AND user_id = $2',
-      [Number(req.body.templateId), req.user.id]
-    );
-    if (!trows.length) return res.status(404).json({ error: 'Template not found.' });
-    const { rows: tfields } = await db.query(
-      'SELECT * FROM report_template_fields WHERE template_id = $1 ORDER BY sort_order, id',
-      [trows[0].id]
-    );
+    let tfields;
+    if (String(req.body.templateId) === BUILTIN_REPORT_TEMPLATE.id) {
+      // Built-in template: fields come from the product constant, not the DB.
+      tfields = BUILTIN_REPORT_TEMPLATE.fields;
+    } else {
+      const { rows: trows } = await db.query(
+        'SELECT * FROM report_templates WHERE id = $1 AND user_id = $2',
+        [Number(req.body.templateId), req.user.id]
+      );
+      if (!trows.length) return res.status(404).json({ error: 'Template not found.' });
+      const { rows } = await db.query(
+        'SELECT * FROM report_template_fields WHERE template_id = $1 ORDER BY sort_order, id',
+        [trows[0].id]
+      );
+      tfields = rows;
+    }
     const { rows: existing } = await db.query(
       'SELECT name FROM custom_fields WHERE report_id = $1',
       [report.id]
@@ -1075,6 +1134,11 @@ router.put(
   '/report-templates/:id',
   auth.requireAuth,
   wrap(async (req, res) => {
+    if (String(req.params.id) === BUILTIN_REPORT_TEMPLATE.id) {
+      return res
+        .status(400)
+        .json({ error: 'That template is built in and cannot be edited.' });
+    }
     const { rows: trows } = await db.query(
       'SELECT * FROM report_templates WHERE id = $1 AND user_id = $2',
       [req.params.id, req.user.id]
@@ -1117,6 +1181,11 @@ router.delete(
   '/report-templates/:id',
   auth.requireAuth,
   wrap(async (req, res) => {
+    if (String(req.params.id) === BUILTIN_REPORT_TEMPLATE.id) {
+      return res
+        .status(400)
+        .json({ error: 'That template is built in and cannot be deleted.' });
+    }
     const { rowCount } = await db.query(
       'DELETE FROM report_templates WHERE id = $1 AND user_id = $2',
       [req.params.id, req.user.id]
@@ -1653,8 +1722,8 @@ router.post(
     );
     const b = req.body || {};
     const { rows } = await db.query(
-      `INSERT INTO findings (report_id, area, title, detail, severity, cost, sort_order)
-       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+      `INSERT INTO findings (report_id, area, title, detail, severity, cost, horizon, sort_order)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
       [
         report.id,
         String(b.area || 'General'),
@@ -1662,6 +1731,7 @@ router.post(
         String(b.detail || ''),
         ai.SEVERITIES.includes(b.severity) ? b.severity : 'Monitor',
         Number(b.cost) || 0,
+        cleanHorizon(b.horizon),
         maxRows[0].m + 1,
       ]
     );
@@ -1688,14 +1758,15 @@ router.put(
     if (!finding) return res.status(404).json({ error: 'Finding not found.' });
     const b = req.body || {};
     await db.query(
-      `UPDATE findings SET area = $1, title = $2, detail = $3, severity = $4, cost = $5
-        WHERE id = $6`,
+      `UPDATE findings SET area = $1, title = $2, detail = $3, severity = $4, cost = $5, horizon = $6
+        WHERE id = $7`,
       [
         String(b.area ?? finding.area),
         String(b.title ?? finding.title),
         String(b.detail ?? finding.detail),
         ai.SEVERITIES.includes(b.severity) ? b.severity : finding.severity,
         b.cost !== undefined ? Number(b.cost) || 0 : Number(finding.cost),
+        b.horizon !== undefined ? cleanHorizon(b.horizon) : cleanHorizon(finding.horizon),
         finding.id,
       ]
     );
