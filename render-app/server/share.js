@@ -180,6 +180,19 @@ function footerCreditHtml() {
   return `<p class="share-credit"><a href="https://inspect-report.com/" target="_blank" rel="noopener"><img src="/assets/logo-icon.png" alt="" />Powered by InspectReport AI</a></p>`;
 }
 
+/* Approved banner: page chrome at the very top of the main content,
+   shown only once the client has approved — the approval line down in
+   the document's signature area is easy to miss, so the founder asked
+   for an unmistakable band above the document too (2026-11-05). The
+   document itself is unchanged. */
+function approvedBannerHtml(report) {
+  return `
+  <div class="approved-banner">
+    <p class="approved-banner-title"><span class="approved-banner-check">✓</span> Approved</p>
+    <p class="approved-banner-sub">Approved by ${esc(report.approved_name || '')} · ${esc(fmtDate(report.approved_at))}</p>
+  </div>`;
+}
+
 function notFoundPage(res) {
   res.setHeader('X-Robots-Tag', 'noindex, nofollow');
   return res.status(404).send(`<!DOCTYPE html>
@@ -334,7 +347,7 @@ function renderSharePage(data, opts = {}) {
 <link rel="icon" type="image/png" href="/assets/favicon.png" />
 </head>
 <body>
-<main class="share-wrap">
+<main class="share-wrap">${approved ? approvedBannerHtml(report) : ''}
   <article class="report">
     <div class="report-head">
       <span class="badge">ESTIMATE</span>
