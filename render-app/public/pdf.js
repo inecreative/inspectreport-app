@@ -808,12 +808,25 @@ async function downloadEstimatePdf(data, setStatus) {
     doc.setLineWidth(1.1);
     doc.line(bodyX, y, bodyX + bodyW, y);
     y += 19;
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(10);
-    setColor(C.metaLabel);
-    doc.text('Customer approval: ___________________', bodyX, y);
-    const dateText = 'Date: ____________';
-    doc.text(dateText, bodyX + bodyW - doc.getTextWidth(dateText), y);
+    if (report.approved_name) {
+      // Approved online via the share link (Phase 1b): one line, same
+      // spot the signature lines occupy in the preview.
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10.5);
+      setColor(C.ink);
+      doc.text(
+        `Approved: ${report.approved_name}, ${String(report.approved_at || '').slice(0, 10)}`,
+        bodyX,
+        y
+      );
+    } else {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10);
+      setColor(C.metaLabel);
+      doc.text('Customer approval: ___________________', bodyX, y);
+      const dateText = 'Date: ____________';
+      doc.text(dateText, bodyX + bodyW - doc.getTextWidth(dateText), y);
+    }
     y += 12;
 
     /* ---------- Company footer ---------- */
