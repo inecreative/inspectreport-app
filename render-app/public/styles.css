@@ -655,6 +655,24 @@ select.sev-Urgent { color: var(--red); font-weight: 700; }
 .share-credit a { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); text-decoration: none; }
 .share-credit a:hover { text-decoration: underline; }
 .share-credit img { height: 15px; width: auto; }
+.approved-banner {
+  background: var(--navy);
+  color: #fff;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  text-align: center;
+  padding: 20px 24px;
+  margin-bottom: 18px;
+}
+.approved-banner-title {
+  font-family: Archivo, sans-serif;
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -.01em;
+  margin: 0;
+}
+.approved-banner-check { color: var(--amber); }
+.approved-banner-sub { margin: 5px 0 0; font-size: 16.5px; color: #D7DEE6; }
 .opt-pick { flex: 0 0 auto; padding-top: 2px; }
 .opt-pick input { width: 21px; height: 21px; accent-color: var(--amber); cursor: pointer; }
 .approve-box {
