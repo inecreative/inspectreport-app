@@ -1845,6 +1845,27 @@ router.post(
   })
 );
 
+/* ✨ Polish for the estimate's long-text fields (Scope / Exclusions /
+   Terms) — the same AI polish the findings get. Returns the polished
+   text only; the client saves it through the field's normal PUT flow. */
+const ESTIMATE_TEXT_FIELDS = ['scope_text', 'exclusions_text', 'terms_text'];
+router.post(
+  '/reports/:id/polish-text',
+  auth.requireAuth,
+  wrap(async (req, res) => {
+    const report = await ownReport(req.user.id, req.params.id);
+    if (!report) return res.status(404).json({ error: 'Report not found.' });
+    const field = String(req.body.field || '');
+    if (!ESTIMATE_TEXT_FIELDS.includes(field)) {
+      return res.status(400).json({ error: 'Invalid field.' });
+    }
+    const text = String(req.body.text ?? '').trim();
+    if (!text) return res.status(400).json({ error: 'Write something first, then polish it.' });
+    const polished = await ai.polishText(text, field);
+    return res.json({ text: polished, aiUsed: ai.aiConfigured() });
+  })
+);
+
 router.post(
   '/reports/:id/summarize',
   auth.requireAuth,
