@@ -1773,6 +1773,40 @@ for (const [id, [key, numeric]] of Object.entries(EST_FIELD_MAP)) {
   });
 }
 
+/* ✨ Polish for the estimate's writing areas (Scope / Exclusions /
+   Terms) — the same AI polish the finding cards have. On success the
+   textarea content is replaced and saved through the field's normal
+   change flow above (which also re-renders the preview); on failure
+   the user's text is left exactly as it was. */
+document.querySelectorAll('[data-polish-text]').forEach((btn) => {
+  btn.addEventListener('click', async () => {
+    if (!state.current) return;
+    const ta = document.getElementById(btn.dataset.polishText);
+    const mapping = EST_FIELD_MAP[btn.dataset.polishText];
+    if (!ta || !mapping) return;
+    const errBox = $('#estPolishError');
+    errBox.classList.add('hidden');
+    if (!ta.value.trim()) {
+      ta.focus();
+      return;
+    }
+    btn.disabled = true;
+    try {
+      const { text } = await api(`/api/reports/${state.current.report.id}/polish-text`, {
+        method: 'POST',
+        body: JSON.stringify({ field: mapping[0], text: ta.value }),
+      });
+      ta.value = text;
+      ta.dispatchEvent(new Event('change'));
+    } catch (err) {
+      errBox.textContent = err.message;
+      errBox.classList.remove('hidden');
+    } finally {
+      btn.disabled = false;
+    }
+  });
+});
+
 $('#addSectionBtn').addEventListener('click', async () => {
   if (!state.current) return;
   const input = $('#newSectionName');
