@@ -8,6 +8,7 @@
 - Repair-cost estimates included in the report
 - PDF export
 - Live report preview while you build the report
+- Estimates can be shared with clients by link: the client opens the estimate online (no account needed), can accept optional add-ons, and approves it with their name; the owner sees when it was viewed and when it was approved
 
 ## Pricing
 - Free: account, reports, and live preview
