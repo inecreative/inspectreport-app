@@ -50,6 +50,21 @@ function shapeFinding(row) {
   return { ...row, cost: Number(row.cost || 0), photos: [] };
 }
 
+function shapeEstimateItem(row) {
+  return {
+    ...row,
+    qty: Number(row.qty || 0),
+    unit_price: Number(row.unit_price || 0),
+    optional: Boolean(row.optional),
+  };
+}
+
+const ITEM_KINDS = ['labor', 'material', 'item'];
+
+function cleanKind(v) {
+  return ITEM_KINDS.includes(v) ? v : 'item';
+}
+
 /**
  * Fetch a row by id. Used instead of `RETURNING *` on writes: some
  * embedded Postgres emulators mishandle RETURNING * on FK-referenced
@@ -76,11 +91,13 @@ async function ownReport(userId, reportId) {
 async function fullReport(userId, reportId) {
   const report = await ownReport(userId, reportId);
   if (!report) return null;
-  const [fields, findingRows, photoRows] = await Promise.all([
+  const [fields, findingRows, photoRows, itemRows] = await Promise.all([
     db.query('SELECT * FROM custom_fields WHERE report_id = $1 ORDER BY sort_order, id', [reportId]),
     db.query('SELECT * FROM findings WHERE report_id = $1 ORDER BY sort_order, id', [reportId]),
     db.query('SELECT * FROM photos WHERE report_id = $1 ORDER BY id', [reportId]),
+    db.query('SELECT * FROM estimate_items WHERE report_id = $1 ORDER BY sort_order, id', [reportId]),
   ]);
+  const estimateItems = itemRows.rows.map(shapeEstimateItem);
   const findings = findingRows.rows.map(shapeFinding);
   const byId = new Map(findings.map((f) => [f.id, f]));
   const photos = photoRows.rows.map(shapePhoto);
@@ -91,7 +108,12 @@ async function fullReport(userId, reportId) {
   // The house photo (report cover), if one is set and still exists.
   const cover = report.cover_photo_id ? photos.find((p) => p.id === report.cover_photo_id) : null;
   report.cover_url = cover ? cover.url : null;
-  return { report, customFields: fields.rows, findings, photos };
+  // Numeric estimate fields come back as strings from pg — normalize.
+  report.deposit_pct = Number(report.deposit_pct || 0);
+  report.discount_value = Number(report.discount_value || 0);
+  report.tax_rate = Number(report.tax_rate || 0);
+  report.valid_days = Number(report.valid_days || 30);
+  return { report, customFields: fields.rows, findings, photos, estimateItems };
 }
 
 async function touchReport(reportId) {
@@ -167,17 +189,23 @@ function profileJson(u) {
     companyName: u.company_name || '',
     phone: u.phone || '',
     companyAddress: u.company_address || '',
+    estTerms: u.est_terms || '',
+    estExclusions: u.est_exclusions || '',
+    estValidDays: Number(u.est_valid_days ?? 30),
+    estDepositPct: Number(u.est_deposit_pct || 0),
   };
 }
+
+const PROFILE_COLS =
+  'email, full_name, company_name, phone, company_address, est_terms, est_exclusions, est_valid_days, est_deposit_pct';
 
 router.get(
   '/profile',
   auth.requireAuth,
   wrap(async (req, res) => {
-    const { rows } = await db.query(
-      'SELECT email, full_name, company_name, phone, company_address FROM users WHERE id = $1',
-      [req.user.id]
-    );
+    const { rows } = await db.query(`SELECT ${PROFILE_COLS} FROM users WHERE id = $1`, [
+      req.user.id,
+    ]);
     if (!rows.length) return res.status(404).json({ error: 'Account not found.' });
     return res.json({ profile: profileJson(rows[0]) });
   })
@@ -188,16 +216,34 @@ router.put(
   auth.requireAuth,
   wrap(async (req, res) => {
     const body = req.body || {};
-    const fullName = String(body.fullName ?? '').trim().slice(0, 120);
-    const companyName = String(body.companyName ?? '').trim().slice(0, 120);
-    const phone = String(body.phone ?? '').trim().slice(0, 40);
-    const companyAddress = String(body.companyAddress ?? '').trim().slice(0, 200);
-    const { rows } = await db.query(
-      `UPDATE users SET full_name = $1, company_name = $2, phone = $3, company_address = $4
-        WHERE id = $5
-        RETURNING email, full_name, company_name, phone, company_address`,
-      [fullName, companyName, phone, companyAddress, req.user.id]
-    );
+    /* Only keys actually present in the body are updated, so the
+       profile form and the estimate-defaults form can save separately
+       without wiping each other's fields. */
+    const defs = [
+      ['fullName', 'full_name', (v) => String(v ?? '').trim().slice(0, 120)],
+      ['companyName', 'company_name', (v) => String(v ?? '').trim().slice(0, 120)],
+      ['phone', 'phone', (v) => String(v ?? '').trim().slice(0, 40)],
+      ['companyAddress', 'company_address', (v) => String(v ?? '').trim().slice(0, 200)],
+      ['estTerms', 'est_terms', (v) => String(v ?? '').slice(0, 4000)],
+      ['estExclusions', 'est_exclusions', (v) => String(v ?? '').slice(0, 4000)],
+      ['estValidDays', 'est_valid_days', (v) => Math.max(0, Math.min(365, Math.round(Number(v) || 0)))],
+      ['estDepositPct', 'est_deposit_pct', (v) => Math.max(0, Math.min(100, Number(v) || 0))],
+    ];
+    const sets = [];
+    const values = [];
+    for (const [key, col, clean] of defs) {
+      if (body[key] !== undefined) {
+        values.push(clean(body[key]));
+        sets.push(`${col} = $${values.length}`);
+      }
+    }
+    if (sets.length) {
+      values.push(req.user.id);
+      await db.query(`UPDATE users SET ${sets.join(', ')} WHERE id = $${values.length}`, values);
+    }
+    const { rows } = await db.query(`SELECT ${PROFILE_COLS} FROM users WHERE id = $1`, [
+      req.user.id,
+    ]);
     if (!rows.length) return res.status(404).json({ error: 'Account not found.' });
     return res.json({ profile: profileJson(rows[0]) });
   })
@@ -653,11 +699,26 @@ router.get(
         s.total_cost += Number(f.cost || 0);
         stats.set(f.report_id, s);
       }
+      const { rows: irows } = await db.query(
+        `SELECT report_id, qty, unit_price, optional FROM estimate_items
+          WHERE report_id IN (SELECT id FROM reports WHERE user_id = $1)`,
+        [req.user.id]
+      );
+      for (const it of irows) {
+        const s = stats.get(it.report_id) || { finding_count: 0, urgent_count: 0, total_cost: 0 };
+        s.item_count = (s.item_count || 0) + 1;
+        if (!it.optional) {
+          s.item_total = (s.item_total || 0) + Number(it.qty || 0) * Number(it.unit_price || 0);
+        }
+        stats.set(it.report_id, s);
+      }
     }
     res.json({
       reports: reports.map((r) => ({
         ...r,
         ...(stats.get(r.id) || { finding_count: 0, urgent_count: 0, total_cost: 0 }),
+        item_count: (stats.get(r.id) || {}).item_count || 0,
+        item_total: (stats.get(r.id) || {}).item_total || 0,
       })),
     });
   })
@@ -669,14 +730,32 @@ router.post(
   wrap(async (req, res) => {
     // New reports start with the inspector name from the user's profile,
     // so they don't retype it on every job (still editable per report).
-    const { rows: urows } = await db.query('SELECT full_name FROM users WHERE id = $1', [
-      req.user.id,
-    ]);
-    const inspectorName = (urows[0] && urows[0].full_name) || '';
-    const { rows } = await db.query(
-      'INSERT INTO reports (user_id, inspector_name) VALUES ($1, $2) RETURNING id',
-      [req.user.id, inspectorName]
+    // Estimate fields are prefilled from the profile's estimate defaults
+    // the same way, so switching a report to an Estimate keeps the
+    // user's own terms / exclusions / validity / deposit.
+    const { rows: urows } = await db.query(
+      'SELECT full_name, est_terms, est_exclusions, est_valid_days, est_deposit_pct FROM users WHERE id = $1',
+      [req.user.id]
     );
+    const u = urows[0] || {};
+    const inspectorName = u.full_name || '';
+    const { rows } = await db.query(
+      `INSERT INTO reports (user_id, inspector_name, terms_text, exclusions_text, valid_days, deposit_pct)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+      [
+        req.user.id,
+        inspectorName,
+        u.est_terms || '',
+        u.est_exclusions || '',
+        Number(u.est_valid_days ?? 30),
+        Number(u.est_deposit_pct || 0),
+      ]
+    );
+    const estimateNumber = `EST-${String(rows[0].id).padStart(4, '0')}`;
+    await db.query('UPDATE reports SET estimate_number = $1 WHERE id = $2', [
+      estimateNumber,
+      rows[0].id,
+    ]);
     res.status(201).json({ report: await byId('reports', rows[0].id) });
   })
 );
@@ -712,11 +791,38 @@ router.put(
     }
     if (req.body.doc_type !== undefined) {
       const docType = String(req.body.doc_type);
-      if (docType !== 'inspection' && docType !== 'job') {
+      if (docType !== 'inspection' && docType !== 'job' && docType !== 'estimate') {
         return res.status(400).json({ error: 'Invalid document type.' });
       }
       values.push(docType);
       sets.push(`doc_type = $${values.length}`);
+    }
+    // Estimate-only document fields (long texts + simple numbers).
+    for (const key of ['scope_text', 'exclusions_text', 'terms_text']) {
+      if (req.body[key] !== undefined) {
+        values.push(String(req.body[key] ?? '').slice(0, 8000));
+        sets.push(`${key} = $${values.length}`);
+      }
+    }
+    if (req.body.valid_days !== undefined) {
+      values.push(Math.max(0, Math.min(365, Math.round(Number(req.body.valid_days) || 0))));
+      sets.push(`valid_days = $${values.length}`);
+    }
+    if (req.body.deposit_pct !== undefined) {
+      values.push(Math.max(0, Math.min(100, Number(req.body.deposit_pct) || 0)));
+      sets.push(`deposit_pct = $${values.length}`);
+    }
+    if (req.body.discount_value !== undefined) {
+      values.push(Math.max(0, Number(req.body.discount_value) || 0));
+      sets.push(`discount_value = $${values.length}`);
+    }
+    if (req.body.discount_type !== undefined) {
+      values.push(req.body.discount_type === 'amt' ? 'amt' : 'pct');
+      sets.push(`discount_type = $${values.length}`);
+    }
+    if (req.body.tax_rate !== undefined) {
+      values.push(Math.max(0, Math.min(100, Number(req.body.tax_rate) || 0)));
+      sets.push(`tax_rate = $${values.length}`);
     }
     if (req.body.cover_photo_id !== undefined) {
       let coverId = req.body.cover_photo_id;
@@ -939,6 +1045,352 @@ router.delete(
     );
     if (!rowCount) return res.status(404).json({ error: 'Template not found.' });
     return res.json({ ok: true });
+  })
+);
+
+/* ------------------------------------------------------------------ */
+/* Estimate items (line items on estimate documents)                   */
+/* ------------------------------------------------------------------ */
+
+router.post(
+  '/reports/:id/items',
+  auth.requireAuth,
+  wrap(async (req, res) => {
+    const report = await ownReport(req.user.id, req.params.id);
+    if (!report) return res.status(404).json({ error: 'Report not found.' });
+    const { rows: maxRows } = await db.query(
+      'SELECT COALESCE(MAX(sort_order), -1) AS m FROM estimate_items WHERE report_id = $1',
+      [report.id]
+    );
+    const b = req.body || {};
+    const { rows } = await db.query(
+      `INSERT INTO estimate_items (report_id, section, description, kind, qty, unit, unit_price, optional, sort_order)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
+      [
+        report.id,
+        String(b.section || ''),
+        String(b.description || ''),
+        cleanKind(b.kind),
+        Number(b.qty) || 0,
+        String(b.unit || ''),
+        Number(b.unit_price) || 0,
+        Boolean(b.optional),
+        maxRows[0].m + 1,
+      ]
+    );
+    await touchReport(report.id);
+    return res
+      .status(201)
+      .json({ item: shapeEstimateItem(await byId('estimate_items', rows[0].id)) });
+  })
+);
+
+async function ownItem(userId, itemId) {
+  const { rows } = await db.query(
+    `SELECT i.* FROM estimate_items i
+       JOIN reports r ON r.id = i.report_id
+      WHERE i.id = $1 AND r.user_id = $2`,
+    [itemId, userId]
+  );
+  return rows[0] || null;
+}
+
+router.put(
+  '/items/:id',
+  auth.requireAuth,
+  wrap(async (req, res) => {
+    const item = await ownItem(req.user.id, req.params.id);
+    if (!item) return res.status(404).json({ error: 'Item not found.' });
+    const b = req.body || {};
+    await db.query(
+      `UPDATE estimate_items
+          SET section = $1, description = $2, kind = $3, qty = $4, unit = $5,
+              unit_price = $6, optional = $7
+        WHERE id = $8`,
+      [
+        String(b.section ?? item.section),
+        String(b.description ?? item.description),
+        cleanKind(b.kind ?? item.kind),
+        b.qty !== undefined ? Number(b.qty) || 0 : Number(item.qty),
+        String(b.unit ?? item.unit),
+        b.unit_price !== undefined ? Number(b.unit_price) || 0 : Number(item.unit_price),
+        b.optional !== undefined ? Boolean(b.optional) : Boolean(item.optional),
+        item.id,
+      ]
+    );
+    await touchReport(item.report_id);
+    return res.json({ item: shapeEstimateItem(await byId('estimate_items', item.id)) });
+  })
+);
+
+router.delete(
+  '/items/:id',
+  auth.requireAuth,
+  wrap(async (req, res) => {
+    const item = await ownItem(req.user.id, req.params.id);
+    if (!item) return res.status(404).json({ error: 'Item not found.' });
+    await db.query('DELETE FROM estimate_items WHERE id = $1', [item.id]);
+    await touchReport(item.report_id);
+    return res.json({ ok: true });
+  })
+);
+
+/* ------------------------------------------------------------------ */
+/* Price book (the user's own saved line items)                        */
+/* ------------------------------------------------------------------ */
+
+router.get(
+  '/price-book',
+  auth.requireAuth,
+  wrap(async (req, res) => {
+    const { rows } = await db.query('SELECT * FROM price_book WHERE user_id = $1 ORDER BY id', [
+      req.user.id,
+    ]);
+    return res.json({
+      entries: rows.map((r) => ({ ...r, unit_price: Number(r.unit_price || 0) })),
+    });
+  })
+);
+
+router.post(
+  '/price-book',
+  auth.requireAuth,
+  wrap(async (req, res) => {
+    const b = req.body || {};
+    const name = String(b.name || '').trim();
+    if (!name) return res.status(400).json({ error: 'Give the price book item a name.' });
+    const { rows } = await db.query(
+      `INSERT INTO price_book (user_id, name, kind, unit, unit_price)
+       VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+      [req.user.id, name, cleanKind(b.kind), String(b.unit || ''), Number(b.unit_price) || 0]
+    );
+    const entry = await byId('price_book', rows[0].id);
+    return res
+      .status(201)
+      .json({ entry: { ...entry, unit_price: Number(entry.unit_price || 0) } });
+  })
+);
+
+router.delete(
+  '/price-book/:id',
+  auth.requireAuth,
+  wrap(async (req, res) => {
+    const { rowCount } = await db.query('DELETE FROM price_book WHERE id = $1 AND user_id = $2', [
+      req.params.id,
+      req.user.id,
+    ]);
+    if (!rowCount) return res.status(404).json({ error: 'Price book item not found.' });
+    return res.json({ ok: true });
+  })
+);
+
+/* ------------------------------------------------------------------ */
+/* Estimate templates (name only — same shape as report templates)     */
+/* ------------------------------------------------------------------ */
+
+router.get(
+  '/estimate-templates',
+  auth.requireAuth,
+  wrap(async (req, res) => {
+    const { rows: templates } = await db.query(
+      'SELECT * FROM estimate_templates WHERE user_id = $1 ORDER BY id',
+      [req.user.id]
+    );
+    const out = [];
+    for (const t of templates) {
+      const { rows: items } = await db.query(
+        'SELECT * FROM estimate_template_items WHERE template_id = $1 ORDER BY sort_order, id',
+        [t.id]
+      );
+      out.push({ ...t, items: items.map(shapeEstimateItem), itemCount: items.length });
+    }
+    return res.json({ templates: out });
+  })
+);
+
+/* Save an estimate's items + texts as a named template. Name only —
+   everything is copied from the estimate, nothing else to fill in. */
+router.post(
+  '/estimate-templates',
+  auth.requireAuth,
+  wrap(async (req, res) => {
+    const name = String(req.body.name || '').trim();
+    if (!name) return res.status(400).json({ error: 'Give the template a name.' });
+    const report = await ownReport(req.user.id, req.body.reportId);
+    if (!report) return res.status(404).json({ error: 'Report not found.' });
+    const { rows: items } = await db.query(
+      'SELECT * FROM estimate_items WHERE report_id = $1 ORDER BY sort_order, id',
+      [report.id]
+    );
+    if (!items.length) {
+      return res.status(400).json({ error: 'Add at least one line item first.' });
+    }
+    const { rows } = await db.query(
+      `INSERT INTO estimate_templates (user_id, name, scope_text, exclusions_text, terms_text)
+       VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+      [req.user.id, name, report.scope_text || '', report.exclusions_text || '', report.terms_text || '']
+    );
+    const templateId = rows[0].id;
+    for (let i = 0; i < items.length; i += 1) {
+      const it = items[i];
+      await db.query(
+        `INSERT INTO estimate_template_items
+           (template_id, section, description, kind, qty, unit, unit_price, optional, sort_order)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        [
+          templateId,
+          it.section,
+          it.description,
+          it.kind,
+          Number(it.qty || 0),
+          it.unit,
+          Number(it.unit_price || 0),
+          Boolean(it.optional),
+          i,
+        ]
+      );
+    }
+    return res.status(201).json({ template: { id: templateId, name, itemCount: items.length } });
+  })
+);
+
+/* Apply appends the template's items; the saved texts fill in only
+   where the target estimate's own texts are still empty. */
+router.post(
+  '/reports/:id/apply-estimate-template',
+  auth.requireAuth,
+  wrap(async (req, res) => {
+    const report = await ownReport(req.user.id, req.params.id);
+    if (!report) return res.status(404).json({ error: 'Report not found.' });
+    const { rows: trows } = await db.query(
+      'SELECT * FROM estimate_templates WHERE id = $1 AND user_id = $2',
+      [Number(req.body.templateId), req.user.id]
+    );
+    if (!trows.length) return res.status(404).json({ error: 'Template not found.' });
+    const tpl = trows[0];
+    const { rows: titems } = await db.query(
+      'SELECT * FROM estimate_template_items WHERE template_id = $1 ORDER BY sort_order, id',
+      [tpl.id]
+    );
+    const { rows: maxRows } = await db.query(
+      'SELECT COALESCE(MAX(sort_order), -1) AS m FROM estimate_items WHERE report_id = $1',
+      [report.id]
+    );
+    let sort = maxRows[0].m + 1;
+    for (const it of titems) {
+      await db.query(
+        `INSERT INTO estimate_items (report_id, section, description, kind, qty, unit, unit_price, optional, sort_order)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        [
+          report.id,
+          it.section,
+          it.description,
+          it.kind,
+          Number(it.qty || 0),
+          it.unit,
+          Number(it.unit_price || 0),
+          Boolean(it.optional),
+          sort,
+        ]
+      );
+      sort += 1;
+    }
+    const sets = [];
+    const vals = [];
+    for (const col of ['scope_text', 'exclusions_text', 'terms_text']) {
+      if (!String(report[col] || '').trim() && String(tpl[col] || '').trim()) {
+        vals.push(tpl[col]);
+        sets.push(`${col} = $${vals.length}`);
+      }
+    }
+    if (sets.length) {
+      vals.push(report.id);
+      await db.query(`UPDATE reports SET ${sets.join(', ')} WHERE id = $${vals.length}`, vals);
+    }
+    if (titems.length || sets.length) await touchReport(report.id);
+    return res.json({ ok: true, added: titems.length });
+  })
+);
+
+router.delete(
+  '/estimate-templates/:id',
+  auth.requireAuth,
+  wrap(async (req, res) => {
+    const { rowCount } = await db.query(
+      'DELETE FROM estimate_templates WHERE id = $1 AND user_id = $2',
+      [req.params.id, req.user.id]
+    );
+    if (!rowCount) return res.status(404).json({ error: 'Template not found.' });
+    return res.json({ ok: true });
+  })
+);
+
+/* Convert an estimate into a NEW Job Report: same client/property,
+   each non-optional line item becomes a finding priced at its line
+   total. The estimate itself is left untouched. */
+router.post(
+  '/reports/:id/convert-to-job',
+  auth.requireAuth,
+  wrap(async (req, res) => {
+    const report = await ownReport(req.user.id, req.params.id);
+    if (!report) return res.status(404).json({ error: 'Report not found.' });
+    if (report.doc_type !== 'estimate') {
+      return res.status(400).json({ error: 'Only an estimate can be converted to a job report.' });
+    }
+    const { rows: items } = await db.query(
+      'SELECT * FROM estimate_items WHERE report_id = $1 ORDER BY sort_order, id',
+      [report.id]
+    );
+    const billable = items.filter((it) => !it.optional);
+    if (!billable.length) {
+      return res.status(400).json({ error: 'Add at least one line item first.' });
+    }
+    const { rows } = await db.query(
+      `INSERT INTO reports (user_id, address, client_name, client_email, client_phone,
+                            inspection_date, inspector_name, doc_type)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 'job') RETURNING id`,
+      [
+        req.user.id,
+        report.address,
+        report.client_name,
+        report.client_email,
+        report.client_phone,
+        report.inspection_date,
+        report.inspector_name,
+      ]
+    );
+    const newId = rows[0].id;
+    await db.query('UPDATE reports SET estimate_number = $1 WHERE id = $2', [
+      `EST-${String(newId).padStart(4, '0')}`,
+      newId,
+    ]);
+    const { rows: fields } = await db.query(
+      'SELECT * FROM custom_fields WHERE report_id = $1 ORDER BY sort_order, id',
+      [report.id]
+    );
+    for (let i = 0; i < fields.length; i += 1) {
+      await db.query(
+        'INSERT INTO custom_fields (report_id, name, value, sort_order) VALUES ($1, $2, $3, $4)',
+        [newId, fields[i].name, fields[i].value, i]
+      );
+    }
+    for (let i = 0; i < billable.length; i += 1) {
+      const it = billable[i];
+      await db.query(
+        `INSERT INTO findings (report_id, area, title, detail, severity, cost, sort_order)
+         VALUES ($1, $2, $3, $4, 'Monitor', $5, $6)`,
+        [
+          newId,
+          it.section || 'General',
+          it.description || 'Line item',
+          '',
+          Number(it.qty || 0) * Number(it.unit_price || 0),
+          i,
+        ]
+      );
+    }
+    const data = await fullReport(req.user.id, newId);
+    return res.status(201).json(data);
   })
 );
 
