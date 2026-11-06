@@ -1106,8 +1106,7 @@ function renderRtPageList() {
         <span class="muted small">${t.fieldCount} field${t.fieldCount === 1 ? '' : 's'}</span>
         ${
           t.builtin
-            ? `<span class="muted small">Built-in</span>
-        <button class="btn btn-white btn-sm" data-open-rt="${t.id}">Open</button>`
+            ? `<span class="muted small">Built-in</span>`
             : `<button class="btn btn-white btn-sm" data-edit-rt="${t.id}">Edit</button>
         <button class="btn btn-danger-ghost btn-sm" data-del-rt="${t.id}">Delete</button>`
         }
@@ -1128,9 +1127,14 @@ function renderRtPageList() {
       await loadTemplates();
     });
   });
-  wrap.querySelectorAll('[data-open-rt]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const tpl = state.templates.find((t) => String(t.id) === btn.dataset.openRt);
+  /* The name itself is the open action — built-ins have no button.
+     stopPropagation keeps the row handler below from firing a second
+     open for the same click. */
+  wrap.querySelectorAll('.tpl-row .tpl-title').forEach((title) => {
+    title.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const row = title.closest('.tpl-row');
+      const tpl = state.templates.find((t) => String(t.id) === row.dataset.tplKey);
       if (tpl) openRtEditor(tpl);
     });
   });
@@ -1992,8 +1996,7 @@ function renderEtPageList() {
         <span class="muted small">${t.itemCount} item${t.itemCount === 1 ? '' : 's'}</span>
         ${
           t.builtin
-            ? `<span class="muted small">Built-in</span>
-        <button class="btn btn-white btn-sm" data-open-et="${t.id}">Open</button>`
+            ? `<span class="muted small">Built-in</span>`
             : `<button class="btn btn-white btn-sm" data-edit-et="${t.id}">Edit</button>
         <button class="btn btn-danger-ghost btn-sm" data-del-et="${t.id}">Delete</button>`
         }
@@ -2014,9 +2017,14 @@ function renderEtPageList() {
       await loadEstTemplates();
     });
   });
-  wrap.querySelectorAll('[data-open-et]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const tpl = state.estTemplates.find((t) => String(t.id) === btn.dataset.openEt);
+  /* The name itself is the open action — built-ins have no button.
+     stopPropagation keeps the row handler below from firing a second
+     open for the same click. */
+  wrap.querySelectorAll('.tpl-row .tpl-title').forEach((title) => {
+    title.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const row = title.closest('.tpl-row');
+      const tpl = state.estTemplates.find((t) => String(t.id) === row.dataset.tplKey);
       if (tpl) openEtEditor(tpl);
     });
   });
