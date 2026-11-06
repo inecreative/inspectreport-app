@@ -280,7 +280,7 @@ async function loadBilling() {
     state.billing = await api('/api/billing');
   } catch (_) {
     state.billing = {
-      priceMonthly: 49,
+      priceMonthly: 9,
       paymentLinkUrl: null,
       subscribed: false,
       pdfAccess: false,
@@ -299,7 +299,7 @@ function isSubscribed() {
 }
 
 /* PDF export is unlocked by a subscription, a comp grant, or the free
-   3-day trial every new account starts with. */
+   7-day trial every new account starts with. */
 function hasPdfAccess() {
   const b = state.billing;
   if (!b) return false;
@@ -312,7 +312,7 @@ function hasPdfAccess() {
 let billingFlash = '';
 
 function billingHtml() {
-  const b = state.billing || { priceMonthly: 49, paymentLinkUrl: null };
+  const b = state.billing || { priceMonthly: 9, paymentLinkUrl: null };
   const flash = billingFlash ? `<p class="small"><b>${esc(billingFlash)}</b></p>` : '';
   if (b.subscribed) {
     const viaNote =
@@ -1047,6 +1047,10 @@ $('#applyTemplateBtn').addEventListener('click', async () => {
 
 /* Templates page — report template list + from-scratch editor. */
 let rtEditId = null;
+/* True while the editor holds a built-in opened as a working copy:
+   Save then creates a user-owned template ("Save as my template")
+   instead of updating anything. */
+let rtFromBuiltin = false;
 
 function renderRtPageList() {
   const wrap = $('#rtPageList');
@@ -1060,7 +1064,8 @@ function renderRtPageList() {
         <span class="muted small">${t.fieldCount} field${t.fieldCount === 1 ? '' : 's'}</span>
         ${
           t.builtin
-            ? '<span class="muted small">Built-in</span>'
+            ? `<span class="muted small">Built-in</span>
+        <button class="btn btn-white btn-sm" data-open-rt="${t.id}">Open</button>`
             : `<button class="btn btn-white btn-sm" data-edit-rt="${t.id}">Edit</button>
         <button class="btn btn-danger-ghost btn-sm" data-del-rt="${t.id}">Delete</button>`
         }
@@ -1079,6 +1084,12 @@ function renderRtPageList() {
       await api(`/api/report-templates/${btn.dataset.delRt}`, { method: 'DELETE' });
       if (rtEditId === Number(btn.dataset.delRt)) closeRtEditor();
       await loadTemplates();
+    });
+  });
+  wrap.querySelectorAll('[data-open-rt]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const tpl = state.templates.find((t) => String(t.id) === btn.dataset.openRt);
+      if (tpl) openRtEditor(tpl);
     });
   });
 }
@@ -1124,8 +1135,17 @@ function collectRtFields() {
 }
 
 function openRtEditor(tpl) {
-  rtEditId = tpl ? tpl.id : null;
-  $('#rtEditorTitle').textContent = tpl ? `Edit template — ${tpl.name}` : 'New report template';
+  const fromBuiltin = Boolean(tpl && tpl.builtin);
+  rtFromBuiltin = fromBuiltin;
+  /* A built-in opens as a working copy: rtEditId stays null so Save
+     takes the create path and the built-in itself is never touched. */
+  rtEditId = tpl && !fromBuiltin ? tpl.id : null;
+  $('#rtEditorTitle').textContent = tpl
+    ? fromBuiltin
+      ? `Built-in template — ${tpl.name}`
+      : `Edit template — ${tpl.name}`
+    : 'New report template';
+  $('#rtEditSaveBtn').textContent = fromBuiltin ? 'Save as my template' : 'Save template';
   $('#rtEditName').value = tpl ? tpl.name : '';
   $('#rtEditMsg').textContent = '';
   renderRtEditRows(tpl ? tpl.fields.map((f) => ({ name: f.name, value: f.value })) : [{ name: '', value: '' }]);
@@ -1135,6 +1155,7 @@ function openRtEditor(tpl) {
 
 function closeRtEditor() {
   rtEditId = null;
+  rtFromBuiltin = false;
   const ed = $('#rtEditor');
   if (ed) ed.classList.add('hidden');
 }
@@ -1163,16 +1184,29 @@ $('#rtEditSaveBtn').addEventListener('click', async () => {
   }
   msg.textContent = 'Saving…';
   try {
+    let createdId = null;
     if (rtEditId) {
       await api(`/api/report-templates/${rtEditId}`, {
         method: 'PUT',
         body: JSON.stringify({ name, fields }),
       });
     } else {
-      await api('/api/report-templates', {
+      const res = await api('/api/report-templates', {
         method: 'POST',
         body: JSON.stringify({ name, fields }),
       });
+      createdId = res && res.template ? res.template.id : null;
+    }
+    if (rtFromBuiltin && createdId) {
+      /* Saved a copy of a built-in: land on the new user template in
+         the editor so it is obvious the copy is theirs and editable. */
+      await loadTemplates();
+      const mine = state.templates.find((t) => t.id === createdId);
+      if (mine) {
+        openRtEditor(mine);
+        $('#rtEditMsg').textContent = 'Saved — this copy is yours now.';
+        return;
+      }
     }
     closeRtEditor();
     await loadTemplates();
@@ -1862,7 +1896,9 @@ function renderEstTemplates() {
 
 $('#applyEstTemplateBtn').addEventListener('click', async () => {
   if (!state.current) return;
-  const templateId = Number($('#etApplySelect').value);
+  // Value is a numeric id for user templates, or a built-in
+  // template's string id — pass it through as-is; the server branches.
+  const templateId = $('#etApplySelect').value;
   if (!templateId) {
     $('#etApplySelect').focus();
     return;
@@ -1882,6 +1918,10 @@ $('#applyEstTemplateBtn').addEventListener('click', async () => {
 
 /* Templates page — estimate template list + from-scratch editor. */
 let etEditId = null;
+/* True while the editor holds a built-in opened as a working copy:
+   Save then creates a user-owned template ("Save as my template")
+   instead of updating anything. */
+let etFromBuiltin = false;
 
 function renderEtPageList() {
   const wrap = $('#etPageList');
@@ -1893,8 +1933,13 @@ function renderEtPageList() {
       <div class="tpl-row">
         <span class="tpl-title">${esc(t.name)}</span>
         <span class="muted small">${t.itemCount} item${t.itemCount === 1 ? '' : 's'}</span>
-        <button class="btn btn-white btn-sm" data-edit-et="${t.id}">Edit</button>
-        <button class="btn btn-danger-ghost btn-sm" data-del-et="${t.id}">Delete</button>
+        ${
+          t.builtin
+            ? `<span class="muted small">Built-in</span>
+        <button class="btn btn-white btn-sm" data-open-et="${t.id}">Open</button>`
+            : `<button class="btn btn-white btn-sm" data-edit-et="${t.id}">Edit</button>
+        <button class="btn btn-danger-ghost btn-sm" data-del-et="${t.id}">Delete</button>`
+        }
       </div>`
         )
         .join('')
@@ -1910,6 +1955,12 @@ function renderEtPageList() {
       await api(`/api/estimate-templates/${btn.dataset.delEt}`, { method: 'DELETE' });
       if (etEditId === Number(btn.dataset.delEt)) closeEtEditor();
       await loadEstTemplates();
+    });
+  });
+  wrap.querySelectorAll('[data-open-et]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const tpl = state.estTemplates.find((t) => String(t.id) === btn.dataset.openEt);
+      if (tpl) openEtEditor(tpl);
     });
   });
 }
@@ -1970,8 +2021,17 @@ function collectEtItems() {
 }
 
 function openEtEditor(tpl) {
-  etEditId = tpl ? tpl.id : null;
-  $('#etEditorTitle').textContent = tpl ? `Edit template — ${tpl.name}` : 'New estimate template';
+  const fromBuiltin = Boolean(tpl && tpl.builtin);
+  etFromBuiltin = fromBuiltin;
+  /* A built-in opens as a working copy: etEditId stays null so Save
+     takes the create path and the built-in itself is never touched. */
+  etEditId = tpl && !fromBuiltin ? tpl.id : null;
+  $('#etEditorTitle').textContent = tpl
+    ? fromBuiltin
+      ? `Built-in template — ${tpl.name}`
+      : `Edit template — ${tpl.name}`
+    : 'New estimate template';
+  $('#etEditSaveBtn').textContent = fromBuiltin ? 'Save as my template' : 'Save template';
   $('#etEditName').value = tpl ? tpl.name : '';
   $('#etEditScope').value = tpl ? tpl.scope_text || '' : '';
   $('#etEditExclusions').value = tpl ? tpl.exclusions_text || '' : '';
@@ -1996,6 +2056,7 @@ function openEtEditor(tpl) {
 
 function closeEtEditor() {
   etEditId = null;
+  etFromBuiltin = false;
   const ed = $('#etEditor');
   if (ed) ed.classList.add('hidden');
 }
@@ -2031,10 +2092,23 @@ $('#etEditSaveBtn').addEventListener('click', async () => {
       exclusionsText: $('#etEditExclusions').value,
       termsText: $('#etEditTerms').value,
     });
+    let createdId = null;
     if (etEditId) {
       await api(`/api/estimate-templates/${etEditId}`, { method: 'PUT', body });
     } else {
-      await api('/api/estimate-templates', { method: 'POST', body });
+      const res = await api('/api/estimate-templates', { method: 'POST', body });
+      createdId = res && res.template ? res.template.id : null;
+    }
+    if (etFromBuiltin && createdId) {
+      /* Saved a copy of a built-in: land on the new user template in
+         the editor so it is obvious the copy is theirs and editable. */
+      await loadEstTemplates();
+      const mine = state.estTemplates.find((t) => t.id === createdId);
+      if (mine) {
+        openEtEditor(mine);
+        $('#etEditMsg').textContent = 'Saved — this copy is yours now.';
+        return;
+      }
     }
     closeEtEditor();
     await loadEstTemplates();
@@ -2342,14 +2416,14 @@ function renderPreview() {
     </article>`;
 }
 
-/* --- PDF (gated: export is part of the $49/mo plan) --- */
+/* --- PDF (gated: export is part of the $9/mo plan) --- */
 
 /**
  * PDF button states (two buttons: under the live preview, and at the
  * bottom of the editor — both always show the same state):
  *  - no report open            -> disabled, default label
  *  - report open, has access   -> enabled, normal download (subscription,
- *    comp grant, or the free 3-day trial every new account starts with)
+ *    comp grant, or the free 7-day trial every new account starts with)
  *  - report open, no access    -> enabled but locked (🔒 PDF — Pro);
  *    clicking it opens the upgrade prompt instead of generating a PDF.
  * Reports, editing and the live preview are always free.
@@ -2374,7 +2448,7 @@ function updatePdfButton() {
 }
 
 function openUpgrade() {
-  const b = state.billing || { priceMonthly: 49, paymentLinkUrl: null };
+  const b = state.billing || { priceMonthly: 9, paymentLinkUrl: null };
   $('#upgradeSubscribeWrap').innerHTML = b.paymentLinkUrl
     ? `<a class="btn btn-amber btn-big btn-block" href="${esc(b.paymentLinkUrl)}" target="_blank" rel="noopener">Subscribe — $${b.priceMonthly}/mo</a>`
     : `<button class="btn btn-amber btn-big btn-block" disabled>Subscribe — $${b.priceMonthly}/mo</button>
