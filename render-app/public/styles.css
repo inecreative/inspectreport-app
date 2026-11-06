@@ -831,7 +831,20 @@ select.sev-Urgent { color: var(--red); font-weight: 700; }
 }
 #templatesView .tpl-list .tpl-row:first-child { border-top: 1px solid #CBD5E1; }
 #templatesView .tpl-list .tpl-row:hover { background: var(--surface2); }
-#templatesView .tpl-list .tpl-row .tpl-title { font-weight: 700; }
+/* The template name is the open action (built-ins have no button):
+   navy semibold with a pointer cursor and an amber underline on hover,
+   so it reads as a click target in both lists. */
+#templatesView .tpl-list .tpl-row .tpl-title {
+  font-weight: 700;
+  color: var(--navy);
+  cursor: pointer;
+}
+#templatesView .tpl-list .tpl-row .tpl-title:hover {
+  text-decoration: underline;
+  text-decoration-color: var(--amber);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+}
 #templatesView .tpl-list .tpl-row.is-selected {
   background: var(--navy);
   color: #fff;
@@ -841,6 +854,8 @@ select.sev-Urgent { color: var(--red); font-weight: 700; }
 }
 #templatesView .tpl-list .tpl-row.is-selected .muted,
 #templatesView .tpl-list .tpl-row.is-selected .small { color: #CBD5E1; }
+/* ...and the name switches to white so it stays readable on navy. */
+#templatesView .tpl-list .tpl-row.is-selected .tpl-title { color: #fff; }
 
 /* Narrow screens: stack — list on top, editor below. */
 @media (max-width: 900px) {
