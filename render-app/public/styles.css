@@ -793,3 +793,57 @@ select.sev-Urgent { color: var(--red); font-weight: 700; }
   border-radius: 8px;
   padding: 10px;
 }
+
+/* === Templates page — two-pane layout (2026-11-05) ===
+   Left pane: the report + estimate template lists. Right pane: the one
+   editor for the selected/opened template (or an empty-state hint).
+   Everything below is scoped to #templatesView, so the report editor,
+   preview and PDF can never match. List rows carry hard divider lines
+   (#CBD5E1 — slate-300 weight, clearly visible on white) between every
+   pair, with the group's first row closing the frame on top; the
+   selected row takes the doc-type buttons' active treatment: navy
+   fill + amber inset ring, its muted meta switching to a light tone
+   so it stays readable on navy. */
+#templatesView .tpl-page { margin: 10px auto 0; }
+#templatesView .tpl-page h1 { margin: 10px 0 16px; }
+#templatesView .tpl-layout {
+  display: grid;
+  grid-template-columns: minmax(320px, 400px) minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+  margin-top: 16px;
+}
+#templatesView .tpl-pane-list .card:last-child { margin-bottom: 0; }
+#templatesView .tpl-pane-editor .card { margin-bottom: 0; }
+
+/* Divider-separated rows. The base .tpl-row rule is a shared flex row
+   (also used by the editor's field rows via .cf-row styles) — here we
+   only restyle its box inside the Templates lists: no gap margin, a
+   full-width bottom rule per row, and a top rule on the first row, so
+   the stack reads as one framed list. */
+#templatesView .tpl-list { margin: 4px 0 14px; }
+#templatesView .tpl-list .tpl-row {
+  margin-bottom: 0;
+  padding: 12px 10px;
+  border-bottom: 1px solid #CBD5E1;
+  border-radius: 6px;
+  cursor: pointer;
+}
+#templatesView .tpl-list .tpl-row:first-child { border-top: 1px solid #CBD5E1; }
+#templatesView .tpl-list .tpl-row:hover { background: var(--surface2); }
+#templatesView .tpl-list .tpl-row .tpl-title { font-weight: 700; }
+#templatesView .tpl-list .tpl-row.is-selected {
+  background: var(--navy);
+  color: #fff;
+  box-shadow: inset 0 0 0 3px var(--amber);
+  border-top-color: transparent;
+  border-bottom-color: transparent;
+}
+#templatesView .tpl-list .tpl-row.is-selected .muted,
+#templatesView .tpl-list .tpl-row.is-selected .small { color: #CBD5E1; }
+
+/* Narrow screens: stack — list on top, editor below. */
+@media (max-width: 900px) {
+  #templatesView .tpl-layout { grid-template-columns: 1fr; }
+  #templatesView .tpl-pane-list .card:last-child { margin-bottom: 20px; }
+}
