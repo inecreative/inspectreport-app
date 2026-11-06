@@ -322,7 +322,7 @@ router.get(
     }
     res.json({
       planName: 'InspectReport AI',
-      priceMonthly: 49,
+      priceMonthly: 9,
       paymentLinkUrl: process.env.PAYMENT_LINK_URL || null,
       aiEnabled: ai.aiConfigured(),
       subscribed: state.subscribed,
@@ -503,10 +503,10 @@ router.get(
       count(`SELECT COUNT(*)::int AS n FROM users WHERE created_at >= now() - interval '7 days'`),
       count(`SELECT COUNT(*)::int AS n FROM users WHERE created_at >= now() - interval '30 days'`),
       count('SELECT COUNT(*)::int AS n FROM users WHERE subscribed = true'),
-      // Trial-active: inside the 3-day free-trial window, not subscribed.
+      // Trial-active: inside the 7-day free-trial window, not subscribed.
       count(
         `SELECT COUNT(*)::int AS n FROM users
-          WHERE subscribed = false AND created_at >= now() - interval '3 days'`
+          WHERE subscribed = false AND created_at >= now() - interval '7 days'`
       ),
       count('SELECT COUNT(*)::int AS n FROM reports'),
       count(`SELECT COUNT(*)::int AS n FROM reports WHERE created_at >= now() - interval '7 days'`),
@@ -965,41 +965,114 @@ router.delete(
   })
 );
 
-/* Built-in report template (Phase 2 commercial pack): a building
-   profile field set that ships with the product. It is merged into
-   every user's templates list — never stored in the user's template
-   tables — and it cannot be edited or deleted (PUT/DELETE return
-   400). Applying it works like any template: fields are appended,
-   duplicate labels skipped. Labels only, values empty. */
-const BUILTIN_REPORT_TEMPLATE = {
-  id: 'builtin-commercial-profile',
-  name: 'Commercial building profile',
-  fields: [
-    'Building type',
-    'Year built',
-    'Stories',
-    'Gross area (sq ft)',
-    'Construction',
-    'Roof type & age',
-    'HVAC type & age',
-    'Parking',
-    'Occupancy',
-  ].map((name) => ({ name, value: '' })),
-};
+/* Built-in report templates: ready-made field sets that ship with the
+   product so new users can start from a realistic preset instead of a
+   blank page. They are merged into every user's templates list —
+   never stored in the user's template tables — and they cannot be
+   edited or deleted (PUT/DELETE return 400). Applying one works like
+   any template: fields are appended, duplicate labels skipped.
+   Labels only, values empty. The first entry is the Phase 2
+   commercial pack's building profile; the rest are common inspection
+   jobs (founder order 2026-11-05: a built-in template library). */
+const BUILTIN_REPORT_TEMPLATES = [
+  {
+    id: 'builtin-condo-townhome',
+    name: 'Condo & townhome',
+    fields: [
+      'Unit #',
+      'Floor',
+      'HOA name',
+      'Parking',
+      'Water shut-off location',
+      'HVAC access',
+      'Amenities checked',
+    ],
+  },
+  {
+    id: 'builtin-4point-insurance',
+    name: '4-point insurance inspection',
+    fields: [
+      'Insurer',
+      'Roof age & material',
+      'Electrical panel (brand / amps)',
+      'Plumbing supply material',
+      'Water heater age',
+      'HVAC age',
+    ],
+  },
+  {
+    id: 'builtin-pre-listing',
+    name: 'Pre-listing inspection',
+    fields: [
+      'Listing agent',
+      'Seller contact',
+      'Asking price',
+      'Year renovated',
+      'Disclosures noted',
+      'Access instructions',
+    ],
+  },
+  {
+    id: 'builtin-new-construction',
+    name: 'New construction — final walkthrough',
+    fields: [
+      'Builder',
+      'Community / plan',
+      'Lot #',
+      'Build phase',
+      'Warranty contact',
+      'Punch-list items',
+    ],
+  },
+  {
+    id: 'builtin-roof-inspection',
+    name: 'Roof inspection',
+    fields: [
+      'Roof material',
+      'Estimated roof age',
+      'Layers',
+      'Access / pitch',
+      'Gutters',
+      'Previous repairs noted',
+    ],
+  },
+  {
+    id: 'builtin-commercial-profile',
+    name: 'Commercial building profile',
+    fields: [
+      'Building type',
+      'Year built',
+      'Stories',
+      'Gross area (sq ft)',
+      'Construction',
+      'Roof type & age',
+      'HVAC type & age',
+      'Parking',
+      'Occupancy',
+    ],
+  },
+].map((t) => ({
+  ...t,
+  fields: t.fields.map((name) => ({ name, value: '' })),
+}));
 
-function builtinTemplateJson() {
+function findBuiltinReportTemplate(id) {
+  return BUILTIN_REPORT_TEMPLATES.find((t) => t.id === String(id)) || null;
+}
+
+function builtinReportTemplateJson(t) {
   return {
-    id: BUILTIN_REPORT_TEMPLATE.id,
-    name: BUILTIN_REPORT_TEMPLATE.name,
+    id: t.id,
+    name: t.name,
     builtin: true,
-    fields: BUILTIN_REPORT_TEMPLATE.fields.map((f, i) => ({
+    fields: t.fields.map((f, i) => ({
       id: null,
-      template_id: BUILTIN_REPORT_TEMPLATE.id,
+      template_id: t.id,
       name: f.name,
       value: f.value,
       sort_order: i,
     })),
-    fieldCount: BUILTIN_REPORT_TEMPLATE.fields.length,
+    fieldCount: t.fields.length,
   };
 }
 
@@ -1019,7 +1092,7 @@ router.get(
       );
       out.push({ ...t, fields, fieldCount: fields.length });
     }
-    out.push(builtinTemplateJson());
+    for (const bt of BUILTIN_REPORT_TEMPLATES) out.push(builtinReportTemplateJson(bt));
     return res.json({ templates: out });
   })
 );
@@ -1088,13 +1161,18 @@ router.post(
     const report = await ownReport(req.user.id, req.params.id);
     if (!report) return res.status(404).json({ error: 'Report not found.' });
     let tfields;
-    if (String(req.body.templateId) === BUILTIN_REPORT_TEMPLATE.id) {
+    const builtinTpl = findBuiltinReportTemplate(req.body.templateId);
+    if (builtinTpl) {
       // Built-in template: fields come from the product constant, not the DB.
-      tfields = BUILTIN_REPORT_TEMPLATE.fields;
+      tfields = builtinTpl.fields;
     } else {
+      const tid = Number(req.body.templateId);
+      if (!Number.isFinite(tid)) {
+        return res.status(404).json({ error: 'Template not found.' });
+      }
       const { rows: trows } = await db.query(
         'SELECT * FROM report_templates WHERE id = $1 AND user_id = $2',
-        [Number(req.body.templateId), req.user.id]
+        [tid, req.user.id]
       );
       if (!trows.length) return res.status(404).json({ error: 'Template not found.' });
       const { rows } = await db.query(
@@ -1134,7 +1212,7 @@ router.put(
   '/report-templates/:id',
   auth.requireAuth,
   wrap(async (req, res) => {
-    if (String(req.params.id) === BUILTIN_REPORT_TEMPLATE.id) {
+    if (findBuiltinReportTemplate(req.params.id)) {
       return res
         .status(400)
         .json({ error: 'That template is built in and cannot be edited.' });
@@ -1181,7 +1259,7 @@ router.delete(
   '/report-templates/:id',
   auth.requireAuth,
   wrap(async (req, res) => {
-    if (String(req.params.id) === BUILTIN_REPORT_TEMPLATE.id) {
+    if (findBuiltinReportTemplate(req.params.id)) {
       return res
         .status(400)
         .json({ error: 'That template is built in and cannot be deleted.' });
@@ -1335,6 +1413,148 @@ router.delete(
 /* Estimate templates (name only — same shape as report templates)     */
 /* ------------------------------------------------------------------ */
 
+/* Built-in estimate templates (founder order 2026-11-05): ready-made
+   priced job presets that ship with the product, same mechanism as
+   the built-in report templates — merged into every user's list,
+   never stored in the user's tables, PUT/DELETE return 400. Prices
+   are editable starting points only, not published rates. Each
+   preset carries short scope / exclusions / terms boilerplate;
+   applying one fills the estimate's texts only where still empty
+   (same rule as user templates). */
+const BUILTIN_ESTIMATE_TEMPLATES = [
+  {
+    id: 'builtin-est-bathroom-leak',
+    name: 'Bathroom leak repair',
+    scope_text:
+      'Isolate and repair the bathroom leak, replace the shut-off valve and supply lines, then patch, texture, and paint the affected drywall.',
+    exclusions_text:
+      'Mold remediation, tile or flooring work, and hidden damage found beyond the opened area are not included and would be quoted separately.',
+    terms_text: 'Valid for 30 days. Balance due on completion. Workmanship guaranteed for 1 year.',
+    items: [
+      { section: 'Plumbing', description: 'Leak diagnosis & isolation', kind: 'item', qty: 1, unit: '', unit_price: 120 },
+      { section: 'Plumbing', description: 'Shut-off valve replacement', kind: 'labor', qty: 1, unit: '', unit_price: 260 },
+      { section: 'Plumbing', description: 'Angle stop valve', kind: 'material', qty: 1, unit: '', unit_price: 38 },
+      { section: 'Plumbing', description: 'Supply lines (pair)', kind: 'material', qty: 1, unit: '', unit_price: 24 },
+      { section: 'Drywall & paint', description: 'Drywall patch materials', kind: 'material', qty: 1, unit: '', unit_price: 65 },
+      { section: 'Drywall & paint', description: 'Drywall repair & texture', kind: 'labor', qty: 1, unit: '', unit_price: 480 },
+      { section: 'Drywall & paint', description: 'Paint touch-up', kind: 'labor', qty: 1, unit: '', unit_price: 180 },
+      { section: 'Plumbing', description: 'Smart leak sensor + install', kind: 'item', qty: 1, unit: '', unit_price: 485, optional: true },
+    ],
+  },
+  {
+    id: 'builtin-est-water-heater',
+    name: 'Water heater replacement (50 gal)',
+    scope_text:
+      'Remove the existing water heater and install a new 50-gallon unit with new fittings and a drain pan, including haul-away of the old unit.',
+    exclusions_text:
+      'Permit fees, gas line or venting modifications, and enlarging the water heater closet or platform are not included unless listed above.',
+    terms_text:
+      'Valid for 30 days. Payment due on completion. Manufacturer warranty applies to the unit; labor guaranteed for 1 year.',
+    items: [
+      { section: 'Water heater replacement', description: '50-gal water heater', kind: 'material', qty: 1, unit: '', unit_price: 1050 },
+      { section: 'Water heater replacement', description: 'Fittings & drain pan', kind: 'material', qty: 1, unit: '', unit_price: 85 },
+      { section: 'Water heater replacement', description: 'Remove old unit & install', kind: 'labor', qty: 3, unit: 'hr', unit_price: 95 },
+      { section: 'Water heater replacement', description: 'Disposal of old unit', kind: 'item', qty: 1, unit: '', unit_price: 75 },
+      { section: 'Water heater replacement', description: 'Expansion tank', kind: 'material', qty: 1, unit: '', unit_price: 180, optional: true },
+      { section: 'Water heater replacement', description: 'Recirculation pump', kind: 'material', qty: 1, unit: '', unit_price: 340, optional: true },
+    ],
+  },
+  {
+    id: 'builtin-est-roof-leak',
+    name: 'Roof leak repair',
+    scope_text:
+      'Locate the source of the roof leak, replace the damaged shingles, and reseal the flashing in the affected area.',
+    exclusions_text:
+      'Full roof replacement, decking replacement beyond the repair area, and interior ceiling repairs are not included.',
+    terms_text: 'Valid for 30 days. Balance due on completion. Leak repair workmanship guaranteed for 1 year.',
+    items: [
+      { section: 'Roof repair', description: 'Leak diagnosis', kind: 'item', qty: 1, unit: '', unit_price: 150 },
+      { section: 'Roof repair', description: 'Replace damaged shingles', kind: 'labor', qty: 2, unit: 'hr', unit_price: 110 },
+      { section: 'Roof repair', description: 'Reseal flashing', kind: 'labor', qty: 1, unit: 'hr', unit_price: 110 },
+      { section: 'Roof repair', description: 'Shingles (1 bundle)', kind: 'material', qty: 1, unit: '', unit_price: 55 },
+      { section: 'Roof repair', description: 'Flashing kit', kind: 'material', qty: 1, unit: '', unit_price: 40 },
+      { section: 'Roof repair', description: 'Sealant', kind: 'material', qty: 1, unit: '', unit_price: 18 },
+      { section: 'Roof repair', description: 'Gutter cleaning', kind: 'labor', qty: 1, unit: '', unit_price: 180, optional: true },
+    ],
+  },
+  {
+    id: 'builtin-est-interior-painting',
+    name: 'Interior painting — one room',
+    scope_text:
+      'Prep, mask, and paint the walls of one room with primer and two finish coats, including patching of small nail holes.',
+    exclusions_text:
+      'Ceiling and trim painting (available as options below), wallpaper removal, and repair of large drywall damage are not included.',
+    terms_text:
+      'Valid for 30 days. Payment due on completion. Final color to be confirmed by the customer before painting begins.',
+    items: [
+      { section: 'Interior painting', description: 'Prep & masking', kind: 'labor', qty: 1.5, unit: 'hr', unit_price: 80 },
+      { section: 'Interior painting', description: 'Primer + 2 coats (walls)', kind: 'labor', qty: 4, unit: 'hr', unit_price: 95 },
+      { section: 'Interior painting', description: 'Paint (2 gal)', kind: 'material', qty: 1, unit: '', unit_price: 110 },
+      { section: 'Interior painting', description: 'Primer (1 gal)', kind: 'material', qty: 1, unit: '', unit_price: 38 },
+      { section: 'Interior painting', description: 'Supplies', kind: 'material', qty: 1, unit: '', unit_price: 25 },
+      { section: 'Interior painting', description: 'Ceiling repaint', kind: 'labor', qty: 1, unit: '', unit_price: 160, optional: true },
+      { section: 'Interior painting', description: 'Trim repaint', kind: 'labor', qty: 1, unit: '', unit_price: 140, optional: true },
+    ],
+  },
+  {
+    id: 'builtin-est-drywall-patch',
+    name: 'Drywall patch & repair',
+    scope_text:
+      'Cut out the damaged drywall, patch and tape the area, match the existing texture, and prime and paint to blend with the surrounding wall.',
+    exclusions_text:
+      'Painting the full wall or room, and repairs to additional patches beyond the one listed, are not included unless added as options.',
+    terms_text: 'Valid for 30 days. Balance due on completion. Texture match is best-effort against the existing finish.',
+    items: [
+      { section: 'Drywall repair', description: 'Cut out & patch', kind: 'labor', qty: 2, unit: 'hr', unit_price: 95 },
+      { section: 'Drywall repair', description: 'Texture match', kind: 'labor', qty: 1, unit: 'hr', unit_price: 95 },
+      { section: 'Drywall repair', description: 'Prime & paint blend', kind: 'labor', qty: 1.5, unit: 'hr', unit_price: 95 },
+      { section: 'Drywall repair', description: 'Patch & drywall', kind: 'material', qty: 1, unit: '', unit_price: 22 },
+      { section: 'Drywall repair', description: 'Compound & tape', kind: 'material', qty: 1, unit: '', unit_price: 16 },
+      { section: 'Drywall repair', description: 'Paint', kind: 'material', qty: 1, unit: '', unit_price: 30 },
+      { section: 'Drywall repair', description: 'Each additional patch', kind: 'labor', qty: 1, unit: '', unit_price: 120, optional: true },
+    ],
+  },
+  {
+    id: 'builtin-est-hvac-tuneup',
+    name: 'HVAC service call & tune-up',
+    scope_text:
+      'Full diagnostic visit and tune-up: coil cleaning, drain line flush, filter replacement, and a check of key electrical components.',
+    exclusions_text:
+      'Major component replacement (compressor, blower motor, control board) and ductwork repairs are not included and would be quoted separately.',
+    terms_text:
+      'Valid for 30 days. Service fee due at the time of the visit. Any additional repairs require customer approval before work begins.',
+    items: [
+      { section: 'HVAC tune-up', description: 'Diagnostic visit', kind: 'item', qty: 1, unit: '', unit_price: 89 },
+      { section: 'HVAC tune-up', description: 'Coil cleaning', kind: 'labor', qty: 1, unit: '', unit_price: 140 },
+      { section: 'HVAC tune-up', description: 'Drain line flush', kind: 'labor', qty: 1, unit: '', unit_price: 65 },
+      { section: 'HVAC tune-up', description: 'Filter set', kind: 'material', qty: 1, unit: '', unit_price: 28 },
+      { section: 'HVAC tune-up', description: 'Capacitor', kind: 'material', qty: 1, unit: '', unit_price: 45 },
+      { section: 'HVAC tune-up', description: 'Refrigerant top-up (per lb)', kind: 'material', qty: 1, unit: 'lb', unit_price: 95, optional: true },
+      { section: 'HVAC tune-up', description: 'Smart thermostat install', kind: 'labor', qty: 1, unit: '', unit_price: 180, optional: true },
+    ],
+  },
+];
+
+function findBuiltinEstimateTemplate(id) {
+  return BUILTIN_ESTIMATE_TEMPLATES.find((t) => t.id === String(id)) || null;
+}
+
+function builtinEstimateTemplateJson(t) {
+  return {
+    id: t.id,
+    user_id: null,
+    name: t.name,
+    scope_text: t.scope_text,
+    exclusions_text: t.exclusions_text,
+    terms_text: t.terms_text,
+    builtin: true,
+    items: t.items.map((it, i) =>
+      shapeEstimateItem({ id: null, template_id: t.id, sort_order: i, ...it })
+    ),
+    itemCount: t.items.length,
+  };
+}
+
 router.get(
   '/estimate-templates',
   auth.requireAuth,
@@ -1351,6 +1571,7 @@ router.get(
       );
       out.push({ ...t, items: items.map(shapeEstimateItem), itemCount: items.length });
     }
+    for (const bt of BUILTIN_ESTIMATE_TEMPLATES) out.push(builtinEstimateTemplateJson(bt));
     return res.json({ templates: out });
   })
 );
@@ -1469,16 +1690,30 @@ router.post(
   wrap(async (req, res) => {
     const report = await ownReport(req.user.id, req.params.id);
     if (!report) return res.status(404).json({ error: 'Report not found.' });
-    const { rows: trows } = await db.query(
-      'SELECT * FROM estimate_templates WHERE id = $1 AND user_id = $2',
-      [Number(req.body.templateId), req.user.id]
-    );
-    if (!trows.length) return res.status(404).json({ error: 'Template not found.' });
-    const tpl = trows[0];
-    const { rows: titems } = await db.query(
-      'SELECT * FROM estimate_template_items WHERE template_id = $1 ORDER BY sort_order, id',
-      [tpl.id]
-    );
+    let tpl;
+    let titems;
+    const builtinEt = findBuiltinEstimateTemplate(req.body.templateId);
+    if (builtinEt) {
+      // Built-in template: items + texts come from the product constant.
+      tpl = builtinEt;
+      titems = builtinEt.items;
+    } else {
+      const tid = Number(req.body.templateId);
+      if (!Number.isFinite(tid)) {
+        return res.status(404).json({ error: 'Template not found.' });
+      }
+      const { rows: trows } = await db.query(
+        'SELECT * FROM estimate_templates WHERE id = $1 AND user_id = $2',
+        [tid, req.user.id]
+      );
+      if (!trows.length) return res.status(404).json({ error: 'Template not found.' });
+      tpl = trows[0];
+      const { rows } = await db.query(
+        'SELECT * FROM estimate_template_items WHERE template_id = $1 ORDER BY sort_order, id',
+        [tpl.id]
+      );
+      titems = rows;
+    }
     const { rows: maxRows } = await db.query(
       'SELECT COALESCE(MAX(sort_order), -1) AS m FROM estimate_items WHERE report_id = $1',
       [report.id]
@@ -1525,6 +1760,11 @@ router.put(
   '/estimate-templates/:id',
   auth.requireAuth,
   wrap(async (req, res) => {
+    if (findBuiltinEstimateTemplate(req.params.id)) {
+      return res
+        .status(400)
+        .json({ error: 'That template is built in and cannot be edited.' });
+    }
     const { rows: trows } = await db.query(
       'SELECT * FROM estimate_templates WHERE id = $1 AND user_id = $2',
       [req.params.id, req.user.id]
@@ -1577,6 +1817,11 @@ router.delete(
   '/estimate-templates/:id',
   auth.requireAuth,
   wrap(async (req, res) => {
+    if (findBuiltinEstimateTemplate(req.params.id)) {
+      return res
+        .status(400)
+        .json({ error: 'That template is built in and cannot be deleted.' });
+    }
     const { rowCount } = await db.query(
       'DELETE FROM estimate_templates WHERE id = $1 AND user_id = $2',
       [req.params.id, req.user.id]
