@@ -366,51 +366,63 @@
       <div class="row-between">
         <button id="templatesBackBtn" class="btn btn-ghost">← All reports</button>
       </div>
-      <div class="profile-col">
+      <div class="tpl-page">
         <h1>Templates</h1>
         <p class="muted small">Built-in starting points — open one to read it, save your own copy to edit.</p>
 
-        <div class="card">
-          <h2>Report templates</h2>
-          <p class="muted small">Sets of custom fields you can drop into any inspection or job report.</p>
-          <div id="rtPageList"></div>
-          <button id="rtNewBtn" class="btn btn-amber">+ New report template</button>
-          <div id="rtEditor" class="hidden">
-            <h3 class="subhead" id="rtEditorTitle">New report template</h3>
-            <label class="field"><span>Template name</span>
-              <input type="text" id="rtEditName" placeholder="e.g. Condo inspection" /></label>
-            <div id="rtEditFields"></div>
-            <button id="rtAddRowBtn" class="btn btn-navy btn-sm">+ Add field</button>
-            <p id="rtEditMsg" class="muted small" aria-live="polite"></p>
-            <div class="row-gap">
-              <button id="rtEditSaveBtn" class="btn btn-amber">Save template</button>
-              <button id="rtEditCancelBtn" class="btn btn-ghost">Cancel</button>
+        <div class="tpl-layout">
+          <div class="tpl-pane-list">
+            <div class="card">
+              <h2>Report templates</h2>
+              <p class="muted small">Sets of custom fields you can drop into any inspection or job report.</p>
+              <div id="rtPageList" class="tpl-list"></div>
+              <button id="rtNewBtn" class="btn btn-amber">+ New report template</button>
+            </div>
+
+            <div class="card">
+              <h2>Estimate templates</h2>
+              <p class="muted small">Line items and wording you can drop into any estimate.</p>
+              <div id="etPageList" class="tpl-list"></div>
+              <button id="etNewBtn" class="btn btn-amber">+ New estimate template</button>
             </div>
           </div>
-        </div>
 
-        <div class="card">
-          <h2>Estimate templates</h2>
-          <p class="muted small">Line items and wording you can drop into any estimate.</p>
-          <div id="etPageList"></div>
-          <button id="etNewBtn" class="btn btn-amber">+ New estimate template</button>
-          <div id="etEditor" class="hidden">
-            <h3 class="subhead" id="etEditorTitle">New estimate template</h3>
-            <label class="field"><span>Template name</span>
-              <input type="text" id="etEditName" placeholder="e.g. Bathroom leak repair" /></label>
-            <h3 class="subhead">Line items</h3>
-            <div id="etEditItems"></div>
-            <button id="etAddRowBtn" class="btn btn-navy btn-sm">+ Add item</button>
-            <label class="field"><span>Scope of work</span>
-              <textarea id="etEditScope" rows="3" placeholder="What this estimate covers…"></textarea></label>
-            <label class="field"><span>Exclusions</span>
-              <textarea id="etEditExclusions" rows="2" placeholder="What is NOT included…"></textarea></label>
-            <label class="field"><span>Terms</span>
-              <textarea id="etEditTerms" rows="2" placeholder="Payment terms, warranty…"></textarea></label>
-            <p id="etEditMsg" class="muted small" aria-live="polite"></p>
-            <div class="row-gap">
-              <button id="etEditSaveBtn" class="btn btn-amber">Save template</button>
-              <button id="etEditCancelBtn" class="btn btn-ghost">Cancel</button>
+          <div class="tpl-pane-editor">
+            <div id="tplEmptyHint" class="card">
+              <p class="muted">Select a template on the left to view or edit it.</p>
+            </div>
+            <div id="tplEditorCard" class="card hidden">
+              <div id="rtEditor" class="hidden">
+                <h3 class="subhead" id="rtEditorTitle">New report template</h3>
+                <label class="field"><span>Template name</span>
+                  <input type="text" id="rtEditName" placeholder="e.g. Condo inspection" /></label>
+                <div id="rtEditFields"></div>
+                <button id="rtAddRowBtn" class="btn btn-navy btn-sm">+ Add field</button>
+                <p id="rtEditMsg" class="muted small" aria-live="polite"></p>
+                <div class="row-gap">
+                  <button id="rtEditSaveBtn" class="btn btn-amber">Save template</button>
+                  <button id="rtEditCancelBtn" class="btn btn-ghost">Cancel</button>
+                </div>
+              </div>
+              <div id="etEditor" class="hidden">
+                <h3 class="subhead" id="etEditorTitle">New estimate template</h3>
+                <label class="field"><span>Template name</span>
+                  <input type="text" id="etEditName" placeholder="e.g. Bathroom leak repair" /></label>
+                <h3 class="subhead">Line items</h3>
+                <div id="etEditItems"></div>
+                <button id="etAddRowBtn" class="btn btn-navy btn-sm">+ Add item</button>
+                <label class="field"><span>Scope of work</span>
+                  <textarea id="etEditScope" rows="3" placeholder="What this estimate covers…"></textarea></label>
+                <label class="field"><span>Exclusions</span>
+                  <textarea id="etEditExclusions" rows="2" placeholder="What is NOT included…"></textarea></label>
+                <label class="field"><span>Terms</span>
+                  <textarea id="etEditTerms" rows="2" placeholder="Payment terms, warranty…"></textarea></label>
+                <p id="etEditMsg" class="muted small" aria-live="polite"></p>
+                <div class="row-gap">
+                  <button id="etEditSaveBtn" class="btn btn-amber">Save template</button>
+                  <button id="etEditCancelBtn" class="btn btn-ghost">Cancel</button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
