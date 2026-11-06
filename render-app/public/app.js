@@ -1052,6 +1052,48 @@ let rtEditId = null;
    instead of updating anything. */
 let rtFromBuiltin = false;
 
+/* Two-pane selection state: which template the right-hand editor pane
+   is showing. kind is 'rt' or 'et'; key is String(template.id) —
+   numeric for user templates, the string id for built-ins — or null
+   while a blank "new" editor is open. */
+let tplSel = null;
+
+function setTplSelection(kind, key) {
+  tplSel = kind ? { kind, key } : null;
+  syncTplPane();
+  markTplSelection();
+}
+
+/* The right pane shows the empty-state hint until an editor is open,
+   then the editor card instead. */
+function syncTplPane() {
+  const rtEd = $('#rtEditor');
+  const etEd = $('#etEditor');
+  if (!rtEd || !etEd) return;
+  const anyOpen =
+    !rtEd.classList.contains('hidden') || !etEd.classList.contains('hidden');
+  const hint = $('#tplEmptyHint');
+  if (hint) hint.classList.toggle('hidden', anyOpen);
+  const card = $('#tplEditorCard');
+  if (card) card.classList.toggle('hidden', !anyOpen);
+}
+
+/* Re-apply the selected-row highlight after every list render (the
+   rows are rebuilt from scratch on each load). */
+function markTplSelection() {
+  document
+    .querySelectorAll('#rtPageList .tpl-row, #etPageList .tpl-row')
+    .forEach((row) => {
+      const selected = Boolean(
+        tplSel &&
+          tplSel.key !== null &&
+          row.dataset.tplKind === tplSel.kind &&
+          row.dataset.tplKey === tplSel.key
+      );
+      row.classList.toggle('is-selected', selected);
+    });
+}
+
 function renderRtPageList() {
   const wrap = $('#rtPageList');
   if (!wrap) return;
@@ -1059,7 +1101,7 @@ function renderRtPageList() {
     ? state.templates
         .map(
           (t) => `
-      <div class="tpl-row">
+      <div class="tpl-row" data-tpl-kind="rt" data-tpl-key="${t.id}">
         <span class="tpl-title">${esc(t.name)}</span>
         <span class="muted small">${t.fieldCount} field${t.fieldCount === 1 ? '' : 's'}</span>
         ${
@@ -1092,6 +1134,15 @@ function renderRtPageList() {
       if (tpl) openRtEditor(tpl);
     });
   });
+  /* Clicking anywhere else on a row opens it in the right pane too. */
+  wrap.querySelectorAll('.tpl-row').forEach((row) => {
+    row.addEventListener('click', (e) => {
+      if (e.target.closest('button')) return;
+      const tpl = state.templates.find((t) => String(t.id) === row.dataset.tplKey);
+      if (tpl) openRtEditor(tpl);
+    });
+  });
+  markTplSelection();
 }
 
 function renderRtEditRows(fields) {
@@ -1135,6 +1186,8 @@ function collectRtFields() {
 }
 
 function openRtEditor(tpl) {
+  /* One editor at a time in the right pane. */
+  closeEtEditor();
   const fromBuiltin = Boolean(tpl && tpl.builtin);
   rtFromBuiltin = fromBuiltin;
   /* A built-in opens as a working copy: rtEditId stays null so Save
@@ -1150,6 +1203,7 @@ function openRtEditor(tpl) {
   $('#rtEditMsg').textContent = '';
   renderRtEditRows(tpl ? tpl.fields.map((f) => ({ name: f.name, value: f.value })) : [{ name: '', value: '' }]);
   $('#rtEditor').classList.remove('hidden');
+  setTplSelection('rt', tpl ? String(tpl.id) : null);
   $('#rtEditName').focus();
 }
 
@@ -1158,6 +1212,9 @@ function closeRtEditor() {
   rtFromBuiltin = false;
   const ed = $('#rtEditor');
   if (ed) ed.classList.add('hidden');
+  if (tplSel && tplSel.kind === 'rt') tplSel = null;
+  syncTplPane();
+  markTplSelection();
 }
 
 $('#rtNewBtn').addEventListener('click', () => openRtEditor(null));
@@ -1930,7 +1987,7 @@ function renderEtPageList() {
     ? state.estTemplates
         .map(
           (t) => `
-      <div class="tpl-row">
+      <div class="tpl-row" data-tpl-kind="et" data-tpl-key="${t.id}">
         <span class="tpl-title">${esc(t.name)}</span>
         <span class="muted small">${t.itemCount} item${t.itemCount === 1 ? '' : 's'}</span>
         ${
@@ -1963,6 +2020,15 @@ function renderEtPageList() {
       if (tpl) openEtEditor(tpl);
     });
   });
+  /* Clicking anywhere else on a row opens it in the right pane too. */
+  wrap.querySelectorAll('.tpl-row').forEach((row) => {
+    row.addEventListener('click', (e) => {
+      if (e.target.closest('button')) return;
+      const tpl = state.estTemplates.find((t) => String(t.id) === row.dataset.tplKey);
+      if (tpl) openEtEditor(tpl);
+    });
+  });
+  markTplSelection();
 }
 
 const ET_BLANK_ITEM = { section: '', description: '', kind: 'item', qty: 1, unit: '', unit_price: 0, optional: false };
@@ -2021,6 +2087,8 @@ function collectEtItems() {
 }
 
 function openEtEditor(tpl) {
+  /* One editor at a time in the right pane. */
+  closeRtEditor();
   const fromBuiltin = Boolean(tpl && tpl.builtin);
   etFromBuiltin = fromBuiltin;
   /* A built-in opens as a working copy: etEditId stays null so Save
@@ -2051,6 +2119,7 @@ function openEtEditor(tpl) {
       : [{ ...ET_BLANK_ITEM }]
   );
   $('#etEditor').classList.remove('hidden');
+  setTplSelection('et', tpl ? String(tpl.id) : null);
   $('#etEditName').focus();
 }
 
@@ -2059,6 +2128,9 @@ function closeEtEditor() {
   etFromBuiltin = false;
   const ed = $('#etEditor');
   if (ed) ed.classList.add('hidden');
+  if (tplSel && tplSel.kind === 'et') tplSel = null;
+  syncTplPane();
+  markTplSelection();
 }
 
 $('#etNewBtn').addEventListener('click', () => openEtEditor(null));
