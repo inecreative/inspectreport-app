@@ -22,7 +22,7 @@
 
 const db = require('./db');
 
-const TRIAL_DAYS = 3;
+const TRIAL_DAYS = 7;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 const DEFAULT_COMP_EMAILS = ['inecreative@gmail.com'];
@@ -68,7 +68,7 @@ function trialEndsAt(userRow) {
 /**
  * Trial state for a users table row: whether the free trial is still
  * running, when it ends (ISO string, null when unknown), and the whole
- * days left (ceil, so a fresh signup reads 3 and the last day reads 1).
+ * days left (ceil, so a fresh signup reads 7 and the last day reads 1).
  */
 function trialInfo(userRow, now = new Date()) {
   const ends = trialEndsAt(userRow);
