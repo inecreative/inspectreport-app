@@ -37,6 +37,47 @@ const C = {
   disclaimer: [156, 163, 175],
 };
 
+/* Report design themes (per-report template), mirroring the preview
+   themes in styles.css (.report.tpl-*). Corporate values are exactly
+   the constants above, so corporate PDFs are unchanged. headText is
+   the address-title color on the head block; accent doubles as the
+   badge outline color for the transparent-badge themes (editorial,
+   dark) — null = solid badge, no outline. titleFont is the jsPDF
+   family for the address title ('times' = editorial serif). */
+const PDF_THEMES = {
+  corporate: {
+    head: C.navy, headText: [255, 255, 255], badgeBg: C.badgeAmber,
+    badgeFg: [17, 24, 39], name: C.navy, accent: null, titleFont: 'helvetica',
+  },
+  minimal: {
+    head: [255, 255, 255], headText: [23, 58, 58], badgeBg: [14, 124, 123],
+    badgeFg: [255, 255, 255], name: [14, 124, 123], accent: null, titleFont: 'helvetica',
+  },
+  clean: {
+    head: [255, 255, 255], headText: [20, 83, 45], badgeBg: [20, 83, 45],
+    badgeFg: [255, 255, 255], name: [20, 83, 45], accent: null, titleFont: 'helvetica',
+  },
+  editorial: {
+    head: [250, 247, 241], headText: [28, 25, 23], badgeBg: [250, 247, 241],
+    badgeFg: [41, 37, 36], name: [41, 37, 36], accent: [41, 37, 36], titleFont: 'times',
+  },
+  dark: {
+    head: [29, 35, 43], headText: [255, 255, 255], badgeBg: [29, 35, 43],
+    badgeFg: [201, 162, 39], name: [20, 24, 29], accent: [201, 162, 39], titleFont: 'helvetica',
+  },
+};
+
+function pdfTheme(report) {
+  return PDF_THEMES[String((report && report.template) || 'corporate')] || PDF_THEMES.corporate;
+}
+
+/* The badge wording: the user's own badge_text when set (exactly as
+   typed), otherwise the surface's current default. */
+function pdfBadgeText(report, fallback) {
+  const custom = String((report && report.badge_text) || '').trim();
+  return custom || fallback;
+}
+
 function pdfMoney(n) {
   return `$${Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
 }
@@ -222,6 +263,7 @@ async function downloadReportPdf(data, setStatus) {
   }
   const { report, customFields, findings, profile } = data;
   const isJob = report.doc_type === 'job';
+  const theme = pdfTheme(report);
   setStatus('Building PDF…');
   try {
     const { jsPDF } = window.jspdf;
@@ -260,7 +302,7 @@ async function downloadReportPdf(data, setStatus) {
       if (coName) {
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(13);
-        setColor(C.navy);
+        setColor(theme.name);
         doc.text(coName, margin, y + 13);
         y += 17;
       }
@@ -294,15 +336,15 @@ async function downloadReportPdf(data, setStatus) {
       }
     }
 
-    /* ---------- Header block (navy card head) ---------- */
-    doc.setFont('helvetica', 'bold');
+    /* ---------- Header block (themed card head) ---------- */
+    doc.setFont(theme.titleFont, 'bold');
     doc.setFontSize(19.5);
     const addrLines = doc.splitTextToSize(
       report.address || 'Add a property address to start your report',
       bodyW
     );
     const headH = 13 + 17 + 9 + addrLines.length * 23 + 15;
-    fillColor(C.navy);
+    fillColor(theme.head);
     if (hasCover) {
       doc.rect(margin, y, contentW, headH, 'F');
     } else {
@@ -312,19 +354,26 @@ async function downloadReportPdf(data, setStatus) {
     // per-character spacing set via setCharSpace, so add it manually —
     // otherwise the badge box comes out too narrow and the end of the
     // text spills off the amber onto the navy.
-    const badgeText = isJob ? 'JOB REPORT' : 'HOME INSPECTION REPORT';
+    doc.setFont('helvetica', 'bold');
+    const badgeText = pdfBadgeText(report, isJob ? 'JOB REPORT' : 'HOME INSPECTION REPORT');
     const badgeCharSpace = 0.5;
     doc.setFontSize(8.5);
     doc.setCharSpace(badgeCharSpace);
     const badgeW = doc.getTextWidth(badgeText) + badgeText.length * badgeCharSpace + 22;
-    fillColor(C.badgeAmber);
+    fillColor(theme.badgeBg);
     doc.roundedRect(bodyX, y + 13, badgeW, 17, 4, 4, 'F');
-    doc.setTextColor(17, 24, 39);
+    if (theme.accent) {
+      doc.setDrawColor(theme.accent[0], theme.accent[1], theme.accent[2]);
+      doc.setLineWidth(1);
+      doc.roundedRect(bodyX, y + 13, badgeW, 17, 4, 4, 'S');
+    }
+    setColor(theme.badgeFg);
     doc.text(badgeText, bodyX + badgeW / 2, y + 13 + 12, { align: 'center' });
     doc.setCharSpace(0);
     // Address title
+    doc.setFont(theme.titleFont, 'bold');
     doc.setFontSize(19.5);
-    setColor([255, 255, 255]);
+    setColor(theme.headText);
     let ty = y + 13 + 17 + 9 + 17;
     for (const line of addrLines) {
       doc.text(line, bodyX, ty);
@@ -490,11 +539,11 @@ async function downloadReportPdf(data, setStatus) {
         y += 2;
       }
 
-      // Photos — thumbnail row like the preview, at 144×108 pt (wrap)
+      // Photos — thumbnail row like the preview, at 101×76 pt (wrap)
       const photos = f.photos || [];
       if (photos.length) {
-        const tw = 144;
-        const th = 108;
+        const tw = 101;
+        const th = 76;
         const gap = 6;
         const perRow = Math.max(1, Math.floor((bodyW + gap) / (tw + gap)));
         y += 5;
@@ -623,6 +672,7 @@ async function downloadReportPdf(data, setStatus) {
 async function downloadEstimatePdf(data, setStatus) {
   const { report, customFields, estimateItems, profile } = data;
   const items = estimateItems || [];
+  const theme = pdfTheme(report);
   setStatus('Building PDF…');
   try {
     const { jsPDF } = window.jspdf;
@@ -661,7 +711,7 @@ async function downloadEstimatePdf(data, setStatus) {
       if (coName) {
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(13);
-        setColor(C.navy);
+        setColor(theme.name);
         doc.text(coName, margin, y + 13);
         y += 17;
       }
@@ -692,31 +742,38 @@ async function downloadEstimatePdf(data, setStatus) {
     }
 
     /* ---------- Header block ---------- */
-    doc.setFont('helvetica', 'bold');
+    doc.setFont(theme.titleFont, 'bold');
     doc.setFontSize(19.5);
     const addrLines = doc.splitTextToSize(
       report.address || 'Add a property address to start your estimate',
       bodyW
     );
     const headH = 13 + 17 + 9 + addrLines.length * 23 + 15;
-    fillColor(C.navy);
+    fillColor(theme.head);
     if (hasCover) {
       doc.rect(margin, y, contentW, headH, 'F');
     } else {
       doc.roundedRect(margin, y, contentW, headH, 7, 7, 'F');
     }
-    const badgeText = 'ESTIMATE';
+    doc.setFont('helvetica', 'bold');
+    const badgeText = pdfBadgeText(report, 'ESTIMATE');
     const badgeCharSpace = 0.5;
     doc.setFontSize(8.5);
     doc.setCharSpace(badgeCharSpace);
     const badgeW = doc.getTextWidth(badgeText) + badgeText.length * badgeCharSpace + 22;
-    fillColor(C.badgeAmber);
+    fillColor(theme.badgeBg);
     doc.roundedRect(bodyX, y + 13, badgeW, 17, 4, 4, 'F');
-    doc.setTextColor(17, 24, 39);
+    if (theme.accent) {
+      doc.setDrawColor(theme.accent[0], theme.accent[1], theme.accent[2]);
+      doc.setLineWidth(1);
+      doc.roundedRect(bodyX, y + 13, badgeW, 17, 4, 4, 'S');
+    }
+    setColor(theme.badgeFg);
     doc.text(badgeText, bodyX + badgeW / 2, y + 13 + 12, { align: 'center' });
     doc.setCharSpace(0);
+    doc.setFont(theme.titleFont, 'bold');
     doc.setFontSize(19.5);
-    setColor([255, 255, 255]);
+    setColor(theme.headText);
     let ty = y + 13 + 17 + 9 + 17;
     for (const line of addrLines) {
       doc.text(line, bodyX, ty);
