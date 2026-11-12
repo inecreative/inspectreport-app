@@ -95,6 +95,21 @@
         <button type="button" class="doctype-btn" data-doctype="estimate" aria-pressed="false"><span class="dt-icon" aria-hidden="true">🧾</span> Estimate</button>
       </div>
 
+      <!-- Report design template: 5 selectable looks for the document -->
+      <div class="template-bar" role="group" aria-label="Report template">
+        <span class="template-bar-label">Template</span>
+        <button type="button" class="tpl-btn is-active" data-template="corporate" aria-pressed="true">Corporate</button>
+        <button type="button" class="tpl-btn" data-template="minimal" aria-pressed="false">Mobile Minimal</button>
+        <button type="button" class="tpl-btn" data-template="clean" aria-pressed="false">Estimate Clean</button>
+        <button type="button" class="tpl-btn" data-template="editorial" aria-pressed="false">Editorial</button>
+        <button type="button" class="tpl-btn" data-template="dark" aria-pressed="false">Dark Premium</button>
+      </div>
+      <div class="badge-text-row">
+        <label class="field"><span>Badge text (optional)</span>
+          <input type="text" id="f_badge_text" maxlength="40" placeholder="Home Inspection Report" /></label>
+        <p class="muted small">Leave blank to use the default wording for this document type. Shown exactly as typed.</p>
+      </div>
+
       <div class="editor-grid">
       <div class="editor-col">
       <div id="statsRow" class="stats-row"></div>
