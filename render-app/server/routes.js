@@ -72,6 +72,10 @@ function shapeEstimateItem(row) {
   };
 }
 
+/* Report design themes (5 selectable templates). 'corporate' is the
+   original look; the preview/PDF/share renderers key off these names. */
+const REPORT_TEMPLATES = ['corporate', 'minimal', 'clean', 'editorial', 'dark'];
+
 const ITEM_KINDS = ['labor', 'material', 'item'];
 
 function cleanKind(v) {
@@ -818,6 +822,18 @@ router.put(
       }
       values.push(docType);
       sets.push(`doc_type = $${values.length}`);
+    }
+    if (req.body.template !== undefined) {
+      const tpl = String(req.body.template);
+      if (!REPORT_TEMPLATES.includes(tpl)) {
+        return res.status(400).json({ error: 'Invalid template.' });
+      }
+      values.push(tpl);
+      sets.push(`template = $${values.length}`);
+    }
+    if (req.body.badge_text !== undefined) {
+      values.push(String(req.body.badge_text ?? '').trim().slice(0, 40));
+      sets.push(`badge_text = $${values.length}`);
     }
     // Estimate-only document fields (long texts + simple numbers).
     for (const key of ['scope_text', 'exclusions_text', 'terms_text']) {
@@ -1853,8 +1869,8 @@ router.post(
     }
     const { rows } = await db.query(
       `INSERT INTO reports (user_id, address, client_name, client_email, client_phone,
-                            inspection_date, inspector_name, doc_type)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, 'job') RETURNING id`,
+                            inspection_date, inspector_name, doc_type, template, badge_text)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 'job', $8, $9) RETURNING id`,
       [
         req.user.id,
         report.address,
@@ -1863,6 +1879,8 @@ router.post(
         report.client_phone,
         report.inspection_date,
         report.inspector_name,
+        REPORT_TEMPLATES.includes(report.template) ? report.template : 'corporate',
+        report.badge_text || '',
       ]
     );
     const newId = rows[0].id;
