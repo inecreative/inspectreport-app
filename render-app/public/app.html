@@ -163,10 +163,6 @@
 
       <div class="card" id="findingsCard">
         <h2>Findings</h2>
-        <label class="field">
-          <span>Field notes — write it rough, AI structures it</span>
-          <textarea id="notesBox" rows="4" placeholder="e.g. kitchen sink leak active, cabinet water damage. roof shingles cracked north side. furnace filter dirty."></textarea>
-        </label>
         <div class="stage-row">
           <label class="btn btn-navy btn-file btn-sm">
             📷 Add photos
@@ -176,6 +172,10 @@
         </div>
         <div id="stageThumbs" class="stage-thumbs"></div>
         <p id="stageError" class="error hidden"></p>
+        <label class="field">
+          <span>Field notes — write it rough, AI structures it</span>
+          <textarea id="notesBox" rows="4" placeholder="e.g. kitchen sink leak active, cabinet water damage. roof shingles cracked north side. furnace filter dirty."></textarea>
+        </label>
         <div class="row-gap">
           <button id="structureBtn" class="btn btn-amber">✨ AI Structure notes</button>
           <button id="addFindingBtn" class="btn btn-navy">+ Add finding manually</button>
