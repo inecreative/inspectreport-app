@@ -15,6 +15,10 @@
 
 const db = require('./db');
 
+/* Report design themes (mirror routes.js REPORT_TEMPLATES): the share
+   page renders the same .report.tpl-* classes as the app preview. */
+const SHARE_TEMPLATES = ['corporate', 'minimal', 'clean', 'editorial', 'dark'];
+
 /* --- helpers (mirror app.js so the page matches the preview) ------- */
 
 function esc(s) {
@@ -348,9 +352,9 @@ function renderSharePage(data, opts = {}) {
 </head>
 <body>
 <main class="share-wrap">${approved ? approvedBannerHtml(report) : ''}
-  <article class="report">
+  <article class="report tpl-${esc(SHARE_TEMPLATES.includes(report.template) ? report.template : 'corporate')}">
     <div class="report-head">
-      <span class="badge">ESTIMATE</span>
+      <span class="badge">${esc(String(report.badge_text || '').trim() || 'ESTIMATE')}</span>
       <h1>${esc(report.address || 'Estimate')}</h1>
     </div>
     <div class="report-body">
