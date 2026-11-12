@@ -146,6 +146,13 @@ const SCHEMA = [
      send customers a "Job Report" instead of an inspection report.
      Must run AFTER the reports table exists. */
   `ALTER TABLE reports ADD COLUMN IF NOT EXISTS doc_type TEXT NOT NULL DEFAULT 'inspection'`,
+  /* Report design theme (5 selectable templates): 'corporate' is the
+     original look and the default, so existing reports never change.
+     badge_text is the user's optional replacement for the orange badge
+     wording ('' = the per-doc-type default). Must run AFTER the
+     reports table exists. */
+  `ALTER TABLE reports ADD COLUMN IF NOT EXISTS template TEXT NOT NULL DEFAULT 'corporate'`,
+  `ALTER TABLE reports ADD COLUMN IF NOT EXISTS badge_text TEXT NOT NULL DEFAULT ''`,
   /* Stripe linkage + cancellation bookkeeping behind the User Profile
      page's subscribe / cancel controls. The customer/subscription ids
      are captured from webhook events; cancel_requested_at records a
