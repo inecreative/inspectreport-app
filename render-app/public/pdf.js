@@ -292,9 +292,9 @@ async function downloadReportPdf(data, setStatus) {
     const coName =
       (profile && profile.companyName) || report.inspector_name || (profile && profile.fullName) || '';
     const coLine = [
-      profile && profile.companyAddress,
-      profile && profile.phone,
-      profile && profile.email,
+      profile && profile.showAddress === false ? null : profile && profile.companyAddress,
+      profile && profile.showPhone === false ? null : profile && profile.phone,
+      profile && profile.showEmail === false ? null : profile && profile.email,
     ]
       .filter((v) => v && String(v).trim())
       .join(' · ');
@@ -701,9 +701,9 @@ async function downloadEstimatePdf(data, setStatus) {
     const coName =
       (profile && profile.companyName) || report.inspector_name || (profile && profile.fullName) || '';
     const coLine = [
-      profile && profile.companyAddress,
-      profile && profile.phone,
-      profile && profile.email,
+      profile && profile.showAddress === false ? null : profile && profile.companyAddress,
+      profile && profile.showPhone === false ? null : profile && profile.phone,
+      profile && profile.showEmail === false ? null : profile && profile.email,
     ]
       .filter((v) => v && String(v).trim())
       .join(' · ');
