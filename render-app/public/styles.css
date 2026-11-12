@@ -516,6 +516,8 @@ select.sev-Urgent { color: var(--red); font-weight: 700; }
 .report-company { margin: 14px 0 0; }
 .report-company .rc-name { font-family: Archivo, sans-serif; font-size: 14.5px; font-weight: 800; color: var(--navy); margin: 0; }
 .report-company .rc-line { font-size: 12.5px; color: #6B7280; margin: 2px 0 0; }
+.check-inline { display: inline-flex; align-items: center; gap: 7px; font-size: 14.5px; font-weight: 600; cursor: pointer; }
+.check-inline input { width: 17px; height: 17px; accent-color: var(--amber); }
 .report-letterhead { padding: 14px 24px 12px; border-bottom: 1.5px solid #E5E7EB; }
 .report-letterhead .lh-name { font-family: Archivo, sans-serif; font-size: 17px; font-weight: 800; color: var(--navy); margin: 0; }
 .report-letterhead .lh-line { font-size: 12.5px; color: #6B7280; margin: 2px 0 0; }
