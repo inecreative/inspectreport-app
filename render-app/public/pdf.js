@@ -13,7 +13,7 @@
  * title, the two-column Client/Date/Inspector meta grid, the cream
  * executive-summary box, findings with inline severity + cost pills,
  * thumbnail photo rows, the total row with signature line, and the
- * company footer. Keep this file in sync with the preview markup/styles —
+ * company letterhead at the top and a slim company + page-number footer. Keep this file in sync with the preview markup/styles —
  * the founder's rule is that the download must look like the preview.
  */
 
@@ -244,6 +244,37 @@ async function downloadReportPdf(data, setStatus) {
     };
     const setColor = (rgb) => doc.setTextColor(rgb[0], rgb[1], rgb[2]);
     const fillColor = (rgb) => doc.setFillColor(rgb[0], rgb[1], rgb[2]);
+
+    /* ---------- Company letterhead (top of page 1 — the industry
+       standard: identity at the top, not a block at the end) ---------- */
+    const coName =
+      (profile && profile.companyName) || report.inspector_name || (profile && profile.fullName) || '';
+    const coLine = [
+      profile && profile.companyAddress,
+      profile && profile.phone,
+      profile && profile.email,
+    ]
+      .filter((v) => v && String(v).trim())
+      .join(' · ');
+    if (coName || coLine) {
+      if (coName) {
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(13);
+        setColor(C.navy);
+        doc.text(coName, margin, y + 13);
+        y += 17;
+      }
+      if (coLine) {
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        setColor(C.metaLabel);
+        for (const line of doc.splitTextToSize(coLine, contentW)) {
+          doc.text(line, margin, y + 9);
+          y += 12;
+        }
+      }
+      y += 10;
+    }
 
     /* ---------- House photo (report cover, top of the document) ---------- */
     // The cover and the navy header form ONE flush unit, exactly like the
@@ -560,32 +591,15 @@ async function downloadReportPdf(data, setStatus) {
       y += 6;
     }
 
-    /* ---------- Company footer (replaces the old disclaimer) ---------- */
-    const coName =
-      (profile && profile.companyName) || report.inspector_name || (profile && profile.fullName) || '';
-    const coLine = [
-      profile && profile.companyAddress,
-      profile && profile.phone,
-      profile && profile.email,
-    ]
-      .filter((v) => v && String(v).trim())
-      .join(' · ');
+    /* ---------- Page footers: "Company — Page X of N" on every page ---------- */
     if (coName) {
-      ensureSpace(16);
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(10.5);
-      setColor(C.ink);
-      doc.text(coName, bodyX, y + 10.5);
-      y += 15;
-    }
-    if (coLine) {
+      const totalPages = doc.getNumberOfPages();
       doc.setFont('helvetica', 'normal');
-      doc.setFontSize(9);
+      doc.setFontSize(8);
       setColor(C.disclaimer);
-      for (const line of doc.splitTextToSize(coLine, bodyW)) {
-        ensureSpace(12);
-        doc.text(line, bodyX, y + 9);
-        y += 12;
+      for (let i = 1; i <= totalPages; i++) {
+        doc.setPage(i);
+        doc.text(`${coName} — Page ${i} of ${totalPages}`, pageW / 2, pageH - 24, { align: 'center' });
       }
     }
 
@@ -631,6 +645,37 @@ async function downloadEstimatePdf(data, setStatus) {
     };
     const setColor = (rgb) => doc.setTextColor(rgb[0], rgb[1], rgb[2]);
     const fillColor = (rgb) => doc.setFillColor(rgb[0], rgb[1], rgb[2]);
+
+    /* ---------- Company letterhead (top of page 1 — the industry
+       standard: identity at the top, not a block at the end) ---------- */
+    const coName =
+      (profile && profile.companyName) || report.inspector_name || (profile && profile.fullName) || '';
+    const coLine = [
+      profile && profile.companyAddress,
+      profile && profile.phone,
+      profile && profile.email,
+    ]
+      .filter((v) => v && String(v).trim())
+      .join(' · ');
+    if (coName || coLine) {
+      if (coName) {
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(13);
+        setColor(C.navy);
+        doc.text(coName, margin, y + 13);
+        y += 17;
+      }
+      if (coLine) {
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        setColor(C.metaLabel);
+        for (const line of doc.splitTextToSize(coLine, contentW)) {
+          doc.text(line, margin, y + 9);
+          y += 12;
+        }
+      }
+      y += 10;
+    }
 
     /* ---------- House photo (report cover) ---------- */
     let hasCover = false;
@@ -898,32 +943,15 @@ async function downloadEstimatePdf(data, setStatus) {
     }
     y += 12;
 
-    /* ---------- Company footer ---------- */
-    const coName =
-      (profile && profile.companyName) || report.inspector_name || (profile && profile.fullName) || '';
-    const coLine = [
-      profile && profile.companyAddress,
-      profile && profile.phone,
-      profile && profile.email,
-    ]
-      .filter((v) => v && String(v).trim())
-      .join(' · ');
+    /* ---------- Page footers: "Company — Page X of N" on every page ---------- */
     if (coName) {
-      ensureSpace(16);
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(10.5);
-      setColor(C.ink);
-      doc.text(coName, bodyX, y + 10.5);
-      y += 15;
-    }
-    if (coLine) {
+      const totalPages = doc.getNumberOfPages();
       doc.setFont('helvetica', 'normal');
-      doc.setFontSize(9);
+      doc.setFontSize(8);
       setColor(C.disclaimer);
-      for (const line of doc.splitTextToSize(coLine, bodyW)) {
-        ensureSpace(12);
-        doc.text(line, bodyX, y + 9);
-        y += 12;
+      for (let i = 1; i <= totalPages; i++) {
+        doc.setPage(i);
+        doc.text(`${coName} — Page ${i} of ${totalPages}`, pageW / 2, pageH - 24, { align: 'center' });
       }
     }
 
