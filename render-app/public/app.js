@@ -770,6 +770,8 @@ function showEditor() {
   const r = state.current.report;
   resetSaveStatus();
   paintDocTypeButtons(['job', 'estimate'].includes(r.doc_type) ? r.doc_type : 'inspection');
+  paintTemplateButtons(reportTemplateKey(r));
+  $('#f_badge_text').value = r.badge_text || '';
   updateDocTypeLabels();
   $('#f_address').value = r.address || '';
   $('#f_client_name').value = r.client_name || '';
@@ -869,6 +871,7 @@ function updateDocTypeLabels() {
   $('#findingsCard').classList.toggle('hidden', isEstimate);
   $('#summaryCard').classList.toggle('hidden', isEstimate);
   $('#estimateCard').classList.toggle('hidden', !isEstimate);
+  updateBadgePlaceholder();
 }
 
 document.querySelectorAll('.doctype-btn').forEach((btn) => {
@@ -884,6 +887,47 @@ document.querySelectorAll('.doctype-btn').forEach((btn) => {
     });
     renderEditor();
   });
+});
+
+/* --- Report template (per report): 5 design themes, picked with the
+   pill buttons under the doc-type bar. Same save path as doc type. */
+function paintTemplateButtons(key) {
+  document.querySelectorAll('.tpl-btn').forEach((btn) => {
+    const on = btn.dataset.template === key;
+    btn.classList.toggle('is-active', on);
+    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+  });
+}
+
+document.querySelectorAll('.tpl-btn').forEach((btn) => {
+  btn.addEventListener('click', async () => {
+    const key = btn.dataset.template;
+    paintTemplateButtons(key);
+    if (!state.current) return;
+    if (reportTemplateKey(state.current.report) === key) return;
+    state.current = await api(`/api/reports/${state.current.report.id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ template: key }),
+    });
+    renderEditor();
+  });
+});
+
+/* --- Badge text: the user's own wording for the report badge.
+   Saved on change, like the other text fields; blank = default. */
+function updateBadgePlaceholder() {
+  const type = currentDocType();
+  $('#f_badge_text').placeholder =
+    type === 'estimate' ? 'ESTIMATE' : type === 'job' ? 'Job Report' : 'Home Inspection Report';
+}
+
+$('#f_badge_text').addEventListener('change', async () => {
+  if (!state.current) return;
+  state.current = await api(`/api/reports/${state.current.report.id}`, {
+    method: 'PUT',
+    body: JSON.stringify({ badge_text: $('#f_badge_text').value }),
+  });
+  renderPreview();
 });
 
 /* --- Property & client main fields: save on change --- */
@@ -2326,6 +2370,23 @@ function estimateValidUntil(report) {
 }
 
 /* --- Estimate preview (mirrors the PDF 1:1) --- */
+/* --- Report design template + badge text (per report) ---
+   The template key picks one of the 5 document themes (styles.css
+   .report.tpl-*); 'corporate' is the original look. badge_text is the
+   user's own wording for the orange badge — shown exactly as typed,
+   with the per-doc-type default when blank. */
+const REPORT_TEMPLATE_KEYS = ['corporate', 'minimal', 'clean', 'editorial', 'dark'];
+
+function reportTemplateKey(report) {
+  const t = String((report && report.template) || 'corporate');
+  return REPORT_TEMPLATE_KEYS.includes(t) ? t : 'corporate';
+}
+
+function badgeTextFor(report, fallback) {
+  const custom = String((report && report.badge_text) || '').trim();
+  return custom || fallback;
+}
+
 function renderEstimatePreview() {
   const { report, customFields, estimateItems } = state.current;
   const items = estimateItems || [];
@@ -2354,11 +2415,11 @@ function renderEstimatePreview() {
     .filter((sec) => sec.items.length);
   const optionalItems = items.filter((i) => i.optional);
   $('#preview').innerHTML = `
-    <article class="report">
+    <article class="report tpl-${reportTemplateKey(report)}">
       ${companyHeadHtml(report)}
       ${report.cover_url ? `<img class="report-cover" src="${esc(report.cover_url)}" alt="Property photo" />` : ''}
       <div class="report-head">
-        <span class="badge">ESTIMATE</span>
+        <span class="badge">${esc(badgeTextFor(report, 'ESTIMATE'))}</span>
         <h1>${esc(report.address || 'Add a property address to start your estimate')}</h1>
       </div>
       <div class="report-body">
@@ -2452,11 +2513,11 @@ function renderPreview() {
     ...customFields.map((f) => [f.name || 'Field', f.value || '—']),
   ];
   $('#preview').innerHTML = `
-    <article class="report">
+    <article class="report tpl-${reportTemplateKey(report)}">
       ${companyHeadHtml(report)}
       ${report.cover_url ? `<img class="report-cover" src="${esc(report.cover_url)}" alt="Property photo" />` : ''}
       <div class="report-head">
-        <span class="badge">${isJob ? 'Job Report' : 'Home Inspection Report'}</span>
+        <span class="badge">${esc(badgeTextFor(report, isJob ? 'Job Report' : 'Home Inspection Report'))}</span>
         <h1>${esc(report.address || 'Add a property address to start your report')}</h1>
       </div>
       <div class="report-body">
