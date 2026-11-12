@@ -96,8 +96,8 @@
       </div>
 
       <!-- Report design template: 5 selectable looks for the document -->
-      <div class="template-bar" role="group" aria-label="Report template">
-        <span class="template-bar-label">Template</span>
+      <div class="template-bar" role="group" aria-label="Report design template">
+        <span class="template-bar-label">Design template</span>
         <button type="button" class="tpl-btn is-active" data-template="corporate" aria-pressed="true">Corporate</button>
         <button type="button" class="tpl-btn" data-template="minimal" aria-pressed="false">Mobile Minimal</button>
         <button type="button" class="tpl-btn" data-template="clean" aria-pressed="false">Estimate Clean</button>
@@ -317,6 +317,15 @@
                 <input type="text" id="p_company_address" autocomplete="street-address" placeholder="1200 Main St, Austin, TX 78701" /></label>
               <label class="field"><span>Email</span>
                 <input type="email" id="p_email" disabled /></label>
+            </div>
+            <div class="field">
+              <span>Show in report header</span>
+              <div class="row-gap wrap">
+                <label class="check-inline"><input type="checkbox" id="p_show_address" /> Address</label>
+                <label class="check-inline"><input type="checkbox" id="p_show_phone" /> Phone</label>
+                <label class="check-inline"><input type="checkbox" id="p_show_email" /> Email</label>
+              </div>
+              <p class="muted small">Under your company name at the top of every report, estimate and PDF.</p>
             </div>
             <p id="profileMsg" class="muted small" aria-live="polite"></p>
             <button type="submit" class="btn btn-amber">Save profile</button>
