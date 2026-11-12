@@ -2355,6 +2355,7 @@ function renderEstimatePreview() {
   const optionalItems = items.filter((i) => i.optional);
   $('#preview').innerHTML = `
     <article class="report">
+      ${companyHeadHtml(report)}
       ${report.cover_url ? `<img class="report-cover" src="${esc(report.cover_url)}" alt="Property photo" />` : ''}
       <div class="report-head">
         <span class="badge">ESTIMATE</span>
@@ -2401,22 +2402,35 @@ function renderEstimatePreview() {
           <span>Date: ____________</span>`
           }
         </div>
-        ${companyBlockHtml(report)}
+        ${companyFootHtml(report)}
       </div>
     </article>`;
 }
 
-/* Company footer at the bottom of the report (replaces the old
-   disclaimer): the preparer's company name, address, phone and email
-   from their User Profile. Renders nothing when all are empty. */
-function companyBlockHtml(report) {
+/* Company identity placement (industry standard, researched 2026-11-12):
+   a letterhead at the TOP of the report — company name + one contact
+   line — and a slim footer line at the bottom. There is deliberately
+   NO company block at the end of the findings body; the document
+   closes with the totals/signature row. Data comes from the User
+   Profile. Renders nothing when all fields are empty. */
+function companyParts(report) {
   const prof = state.profile || {};
   const coName = prof.companyName || report.inspector_name || prof.fullName || '';
   const coLine = [prof.companyAddress, prof.phone, prof.email]
     .filter((v) => v && String(v).trim())
     .join(' · ');
+  return { coName, coLine };
+}
+function companyHeadHtml(report) {
+  const { coName, coLine } = companyParts(report);
   if (!coName && !coLine) return '';
-  return `<div class="report-company">${coName ? `<p class="rc-name">${esc(coName)}</p>` : ''}${coLine ? `<p class="rc-line">${esc(coLine)}</p>` : ''}</div>`;
+  return `<div class="report-letterhead">${coName ? `<p class="lh-name">${esc(coName)}</p>` : ''}${coLine ? `<p class="lh-line">${esc(coLine)}</p>` : ''}</div>`;
+}
+function companyFootHtml(report) {
+  const { coName, coLine } = companyParts(report);
+  const parts = [coName, coLine].filter(Boolean).join(' · ');
+  if (!parts) return '';
+  return `<div class="report-foot">${esc(parts)}</div>`;
 }
 
 /* --- Preview (mirrors the approved report document look) --- */
@@ -2439,6 +2453,7 @@ function renderPreview() {
   ];
   $('#preview').innerHTML = `
     <article class="report">
+      ${companyHeadHtml(report)}
       ${report.cover_url ? `<img class="report-cover" src="${esc(report.cover_url)}" alt="Property photo" />` : ''}
       <div class="report-head">
         <span class="badge">${isJob ? 'Job Report' : 'Home Inspection Report'}</span>
@@ -2491,7 +2506,7 @@ function renderPreview() {
         </table>`
             : ''
         }
-        ${companyBlockHtml(report)}
+        ${companyFootHtml(report)}
       </div>
     </article>`;
 }
