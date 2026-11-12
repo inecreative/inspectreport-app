@@ -477,7 +477,7 @@ select.sev-Urgent { color: var(--red); font-weight: 700; }
 .r-line b { font-size: 15.5px; }
 .r-detail { margin: 7px 0 0; font-size: 15px; line-height: 1.65; }
 .r-photos { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
-.r-photos img { width: 192px; height: 144px; object-fit: cover; border-radius: 8px; }
+.r-photos img { width: 134px; height: 101px; object-fit: cover; border-radius: 8px; }
 .section-divider { border-top: 2px solid #C4C9D1; margin: 22px 0 0; }
 .r-empty { font-size: 14.5px; color: #6B7280; }
 .pill {
@@ -520,6 +520,57 @@ select.sev-Urgent { color: var(--red); font-weight: 700; }
 .report-letterhead .lh-name { font-family: Archivo, sans-serif; font-size: 17px; font-weight: 800; color: var(--navy); margin: 0; }
 .report-letterhead .lh-line { font-size: 12.5px; color: #6B7280; margin: 2px 0 0; }
 .report-foot { text-align: center; font-size: 11.5px; color: #9CA3AF; border-top: 1.5px solid #E5E7EB; margin-top: 18px; padding-top: 10px; }
+
+/* ---------- Report design themes (per-report template) ----------
+   .report.tpl-corporate is the base look above — no overrides, so
+   existing reports stay pixel-identical. The other four restyle the
+   letterhead, head block, badge, section headings and totals accent.
+   Mockup targets: goals/inspectreport-ai/files/report-template-designs.html */
+
+/* 2 — Mobile Minimal (mockup d2): white head, teal accents, soft cards */
+.report.tpl-minimal { border-radius: 16px; }
+.report.tpl-minimal .report-letterhead .lh-name { color: #0E7C7B; }
+.report.tpl-minimal .report-letterhead .lh-line { color: #8A9A9A; }
+.report.tpl-minimal .report-head { background: #FFFFFF; color: #173A3A; }
+.report.tpl-minimal .report-head .badge { background: #0E7C7B; color: #FFFFFF; }
+.report.tpl-minimal .report-head h1 { color: #173A3A; }
+.report.tpl-minimal .report-head p { color: #8A9A9A; opacity: 1; }
+.report.tpl-minimal .report-body h3 { color: #173A3A; }
+.report.tpl-minimal .total-row b { color: #0E7C7B; }
+
+/* 3 — Estimate Clean (mockup d3): white head, deep green accents */
+.report.tpl-clean .report-letterhead .lh-name { color: #14532D; }
+.report.tpl-clean .report-head { background: #FFFFFF; color: #14532D; }
+.report.tpl-clean .report-head .badge { background: #14532D; color: #FFFFFF; }
+.report.tpl-clean .report-head h1 { color: #14532D; }
+.report.tpl-clean .report-head p { color: #6B7280; opacity: 1; }
+.report.tpl-clean .report-body h3 { color: #14532D; }
+.report.tpl-clean .total-row { border-top-color: #14532D; }
+
+/* 4 — Editorial (mockup d4): warm paper, serif display type */
+.report.tpl-editorial { background: #FAF7F1; }
+.report.tpl-editorial .report-letterhead { border-bottom-color: #E7E0D4; }
+.report.tpl-editorial .report-letterhead .lh-name {
+  font-family: Georgia, "Times New Roman", serif; font-weight: 400;
+  letter-spacing: 2.5px; text-transform: uppercase; color: #292524;
+}
+.report.tpl-editorial .report-letterhead .lh-line { color: #A8A29E; letter-spacing: 1.2px; text-transform: uppercase; font-size: 11px; }
+.report.tpl-editorial .report-head { background: #FAF7F1; color: #1C1917; }
+.report.tpl-editorial .report-head .badge { background: transparent; border: 1px solid #292524; color: #292524; letter-spacing: 2px; }
+.report.tpl-editorial .report-head h1 { font-family: Georgia, "Times New Roman", serif; font-weight: 400; color: #1C1917; letter-spacing: 0; }
+.report.tpl-editorial .report-head p { color: #78716C; opacity: 1; }
+.report.tpl-editorial .report-body h3 { font-family: Georgia, "Times New Roman", serif; font-weight: 400; color: #1C1917; }
+.report.tpl-editorial .r-line b { font-family: Georgia, "Times New Roman", serif; }
+.report.tpl-editorial .total-row { border-top-color: #292524; }
+
+/* 5 — Dark Premium (mockup d5): charcoal + gold */
+.report.tpl-dark .report-letterhead { background: #14181D; border-bottom: 3px solid #C9A227; }
+.report.tpl-dark .report-letterhead .lh-name { color: #FFFFFF; }
+.report.tpl-dark .report-letterhead .lh-line { color: #9AA4AE; }
+.report.tpl-dark .report-head { background: #1D232B; }
+.report.tpl-dark .report-head .badge { background: transparent; border: 1px solid #C9A227; color: #C9A227; }
+.report.tpl-dark .report-body h3 { color: #14181D; border-bottom: 2px solid #C9A227; padding-bottom: 5px; }
+.report.tpl-dark .total-row b { color: #14181D; }
 
 /* ---------- Footer ---------- */
 .app-footer { text-align: center; color: var(--muted); padding: 22px; border-top: 1.5px solid var(--line); font-size: 14.5px; }
@@ -579,6 +630,29 @@ select.sev-Urgent { color: var(--red); font-weight: 700; }
 }
 .doctype-btn.is-active:hover { background: var(--navy2); }
 .doctype-btn:focus-visible { outline: 3px solid var(--amber); outline-offset: 2px; }
+
+/* ---------- Report template picker (5 design themes) ---------- */
+.template-bar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: -6px 0 10px; }
+.template-bar-label {
+  font-family: Archivo, sans-serif; font-size: 13px; font-weight: 800;
+  letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-right: 2px;
+}
+.tpl-btn {
+  padding: 9px 14px;
+  font-family: Archivo, sans-serif; font-size: 14.5px; font-weight: 700;
+  color: var(--navy); background: var(--surface);
+  border: 2px solid var(--line); border-radius: 999px;
+  cursor: pointer;
+}
+.tpl-btn:hover { background: var(--surface2); }
+.tpl-btn.is-active {
+  background: var(--navy); color: #fff; border-color: var(--navy);
+  box-shadow: inset 0 0 0 2px var(--amber);
+}
+.tpl-btn:focus-visible { outline: 3px solid var(--amber); outline-offset: 2px; }
+.badge-text-row { display: flex; gap: 14px; align-items: flex-end; flex-wrap: wrap; margin: 0 0 20px; }
+.badge-text-row .field { flex: 0 1 340px; margin: 0; }
+.badge-text-row p { margin: 0 0 10px; }
 
 /* ---------- Estimate editor + document ---------- */
 .inline-2 { display: flex; gap: 8px; }
