@@ -515,6 +515,9 @@ async function loadProfile() {
   $('#p_company_name').value = p.companyName || '';
   $('#p_phone').value = p.phone || '';
   $('#p_company_address').value = p.companyAddress || '';
+  $('#p_show_address').checked = p.showAddress !== false;
+  $('#p_show_phone').checked = p.showPhone !== false;
+  $('#p_show_email').checked = p.showEmail !== false;
   $('#p_email').value = p.email || (state.user && state.user.email) || '';
   $('#profileMsg').textContent = '';
   $('#p_est_terms').value = p.estTerms || '';
@@ -585,6 +588,9 @@ $('#profileForm').addEventListener('submit', async (e) => {
         companyName: $('#p_company_name').value,
         phone: $('#p_phone').value,
         companyAddress: $('#p_company_address').value,
+        showAddress: $('#p_show_address').checked,
+        showPhone: $('#p_show_phone').checked,
+        showEmail: $('#p_show_email').checked,
       }),
     });
     state.profile = profile;
@@ -2477,7 +2483,11 @@ function renderEstimatePreview() {
 function companyParts(report) {
   const prof = state.profile || {};
   const coName = prof.companyName || report.inspector_name || prof.fullName || '';
-  const coLine = [prof.companyAddress, prof.phone, prof.email]
+  const coLine = [
+    prof.showAddress === false ? '' : prof.companyAddress,
+    prof.showPhone === false ? '' : prof.phone,
+    prof.showEmail === false ? '' : prof.email,
+  ]
     .filter((v) => v && String(v).trim())
     .join(' · ');
   return { coName, coLine };
