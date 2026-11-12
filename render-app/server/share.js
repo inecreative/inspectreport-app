@@ -357,9 +357,9 @@ function renderSharePage(data, opts = {}) {
       <dl class="meta">
         ${rows.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}
       </dl>
+      ${companyBlockHtml(report, profile)}
       ${bodySections}
       ${actionableBody}
-      ${companyBlockHtml(report, profile)}
     </div>
   </article>
   ${declineBlock}
