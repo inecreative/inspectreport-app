@@ -130,7 +130,7 @@ async function loadShare(token) {
       report.id,
     ]),
     db.query(
-      'SELECT email, full_name, company_name, phone, company_address FROM users WHERE id = $1',
+      'SELECT email, full_name, company_name, phone, company_address, show_address, show_phone, show_email FROM users WHERE id = $1',
       [report.user_id]
     ),
   ]);
@@ -145,6 +145,9 @@ async function loadShare(token) {
       companyName: u.company_name || '',
       phone: u.phone || '',
       companyAddress: u.company_address || '',
+      showAddress: u.show_address !== false,
+      showPhone: u.show_phone !== false,
+      showEmail: u.show_email !== false,
     },
   };
 }
@@ -168,7 +171,11 @@ async function recordView(req, report) {
 
 function companyBlockHtml(report, profile) {
   const coName = profile.companyName || report.inspector_name || profile.fullName || '';
-  const coLine = [profile.companyAddress, profile.phone, profile.email]
+  const coLine = [
+    profile.showAddress === false ? '' : profile.companyAddress,
+    profile.showPhone === false ? '' : profile.phone,
+    profile.showEmail === false ? '' : profile.email,
+  ]
     .filter((v) => v && String(v).trim())
     .join(' · ');
   if (!coName && !coLine) return '';
