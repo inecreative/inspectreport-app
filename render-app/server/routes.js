@@ -219,11 +219,14 @@ function profileJson(u) {
     estExclusions: u.est_exclusions || '',
     estValidDays: Number(u.est_valid_days ?? 30),
     estDepositPct: Number(u.est_deposit_pct || 0),
+    showAddress: u.show_address !== false,
+    showPhone: u.show_phone !== false,
+    showEmail: u.show_email !== false,
   };
 }
 
 const PROFILE_COLS =
-  'email, full_name, company_name, phone, company_address, est_terms, est_exclusions, est_valid_days, est_deposit_pct';
+  'email, full_name, company_name, phone, company_address, est_terms, est_exclusions, est_valid_days, est_deposit_pct, show_address, show_phone, show_email';
 
 router.get(
   '/profile',
@@ -254,6 +257,9 @@ router.put(
       ['estExclusions', 'est_exclusions', (v) => String(v ?? '').slice(0, 4000)],
       ['estValidDays', 'est_valid_days', (v) => Math.max(0, Math.min(365, Math.round(Number(v) || 0)))],
       ['estDepositPct', 'est_deposit_pct', (v) => Math.max(0, Math.min(100, Number(v) || 0))],
+      ['showAddress', 'show_address', (v) => v === true],
+      ['showPhone', 'show_phone', (v) => v === true],
+      ['showEmail', 'show_email', (v) => v === true],
     ];
     const sets = [];
     const values = [];
