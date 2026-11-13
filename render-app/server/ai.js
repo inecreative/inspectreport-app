@@ -47,6 +47,9 @@ async function chatJSON(system, user) {
         model: model(),
         temperature: 0.3,
         response_format: { type: 'json_object' },
+        // Qwen3.7 reasoning models are slow with thinking on (~20s/call);
+        // disable it on Alibaba endpoints only — other providers never see it.
+        ...(/(aliyuncs\.com|dashscope)/.test(baseUrl()) ? { enable_thinking: false } : {}),
         messages: [
           { role: 'system', content: system },
           { role: 'user', content: user },
